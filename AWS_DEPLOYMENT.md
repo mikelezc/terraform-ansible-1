@@ -15,11 +15,10 @@ Por lo que si mantienes **una sola** instancia encendida 24/7 en el mes, no nos 
 
 - **Almacenamiento (EBS)**: Tenemos derecho a **30 GB de almacenamiento SSD** (gp2 o gp3) al mes.
 
-- **IPs Elásticas (Elastic IPs)**: Son gratuitas **siempre y cuando estén asociadas a una instancia EC2 encendida**. Si apagas tu instancia y dejas la IP Elástica reservada, AWS te cobrará unos céntimos por hora. **Esto un error muy común**
+- **IPs Elásticas (Elastic IPs)**: Son gratuitas **siempre y cuando estén asociadas a una instancia EC2 encendida**. Si apagamos la instancia y dejamos la IP Elástica reservada, AWS nos cobrará unos céntimos por hora. **Para este proyecto no es necesaria**. El Subject dice literalmente: "We will tolerate the absence of a memorable domain name". 
+Esto implica que podemos defender el proyecto accediendo simplemente a través de la IP pública aleatoria que AWS nos asigne cada vez que levantemos el ec2.
 
 > **IMPORTANTE**: Cuando no estemos trabajando con el proyecto, **detendremos (Stop)** la instancia EC2. 
-
-Al detenerla, el cobro por hora de la instancia cesa, pero no ocurrirá con la Elastic IP (la liberaremos la liberaremos).
 
 ---
 
