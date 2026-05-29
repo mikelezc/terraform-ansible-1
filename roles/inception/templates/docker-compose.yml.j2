@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:10.6
+    container_name: mariadb
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - /home/{{ deploy_user }}/data/mariadb:/var/lib/mysql
+    networks:
+      - inception_network
+    expose:
+      - "3306"
+
+  wordpress:
+    image: wordpress:6-fpm
+    container_name: wordpress
+    restart: always
+    depends_on:
+      - mariadb
+    environment:
+      WORDPRESS_DB_HOST: mariadb:3306
+      WORDPRESS_DB_USER: ${DB_USER}
+      WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
+      WORDPRESS_DB_NAME: ${DB_NAME}
+    volumes:
+      - /home/{{ deploy_user }}/data/wordpress:/var/www/html
+    networks:
+      - inception_network
+    expose:
+      - "9000"
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: phpmyadmin
+    restart: always
+    depends_on:
+      - mariadb
+    environment:
+      PMA_HOST: mariadb
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      # Required to make phpMyAdmin work properly behind a reverse proxy under a subpath
+      PMA_ABSOLUTE_URI: "https://${DOMAIN_NAME}/phpmyadmin/"
+    networks:
+      - inception_network
+    expose:
+      - "80"
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    restart: always
+    depends_on:
+      - wordpress
+      - phpmyadmin
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /home/{{ deploy_user }}/data/wordpress:/var/www/html
+      - /home/{{ deploy_user }}/data/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /home/{{ deploy_user }}/data/nginx/ssl:/etc/nginx/ssl:ro
+    networks:
+      - inception_network
+
+networks:
+  inception_network:
+    driver: bridge

@@ -1,0 +1,75 @@
+---
+# tasks file for inception role
+
+- name: Define domain name variable
+  set_fact:
+    domain_name: "{{ domain_name | default('cloud1.local') }}"
+
+- name: Create required directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: '0755'
+  loop:
+    - "/home/{{ deploy_user }}/data"
+    - "/home/{{ deploy_user }}/data/mariadb"
+    - "/home/{{ deploy_user }}/data/wordpress"
+    - "/home/{{ deploy_user }}/data/nginx"
+    - "/home/{{ deploy_user }}/data/nginx/ssl"
+    - "/home/{{ deploy_user }}/inception"
+
+- name: Generate OpenSSL private key for Nginx
+  openssl_privatekey:
+    path: "/home/{{ deploy_user }}/data/nginx/ssl/server.key"
+    size: 2048
+
+- name: Generate OpenSSL CSR for Nginx
+  openssl_csr:
+    path: "/home/{{ deploy_user }}/data/nginx/ssl/server.csr"
+    privatekey_path: "/home/{{ deploy_user }}/data/nginx/ssl/server.key"
+    common_name: "{{ domain_name }}"
+
+- name: Generate Self-Signed OpenSSL certificate for Nginx
+  openssl_certificate:
+    path: "/home/{{ deploy_user }}/data/nginx/ssl/server.crt"
+    privatekey_path: "/home/{{ deploy_user }}/data/nginx/ssl/server.key"
+    csr_path: "/home/{{ deploy_user }}/data/nginx/ssl/server.csr"
+    provider: selfsigned
+
+- name: Template Nginx configuration
+  template:
+    src: nginx.conf.j2
+    dest: "/home/{{ deploy_user }}/data/nginx/nginx.conf"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: '0644'
+
+- name: Template docker-compose file
+  template:
+    src: docker-compose.yml.j2
+    dest: "/home/{{ deploy_user }}/inception/docker-compose.yml"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: '0644'
+
+- name: Copy .env example to target
+  copy:
+    src: .env.example
+    dest: "/home/{{ deploy_user }}/inception/.env"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: '0600'
+    force: no # Do not overwrite if it already exists
+
+- name: Ensure python3-cryptography is installed
+  apt:
+    name: python3-cryptography
+    state: present
+    update_cache: yes
+
+- name: Launch docker-compose stack
+  command: docker compose -f /home/{{ deploy_user }}/inception/docker-compose.yml up -d
+  args:
+    chdir: "/home/{{ deploy_user }}/inception"

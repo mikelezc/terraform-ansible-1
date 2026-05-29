@@ -1,0 +1,62 @@
+---
+# tasks file for docker role
+
+- name: Install prerequisite packages for Docker
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: yes
+
+- name: Add Docker GPG apt Key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Get Ubuntu architecture
+  command: dpkg --print-architecture
+  register: ubuntu_arch
+  changed_when: false
+
+- name: Add Docker Repository
+  apt_repository:
+    repo: "deb [arch={{ ubuntu_arch.stdout }}] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+
+- name: Install Docker CE, CLI, and Containerd
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+
+- name: Ensure Docker service is started and enabled
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Install docker-compose binary (fallback if plugin isn't enough for some environments)
+  get_url:
+    url: "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-{{ ansible_system | lower }}-{{ ubuntu_arch.stdout }}"
+    dest: /usr/local/bin/docker-compose
+    mode: 'a+x'
+    force: false
+
+- name: Ensure Python 3 pip is installed
+  apt:
+    name: python3-pip
+    state: present
+
+- name: Install python docker module
+  pip:
+    name: docker
+    state: present

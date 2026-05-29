@@ -1,0 +1,12 @@
+---
+- name: Deploy Cloud-1 Inception Stack
+  hosts: cloud_1_servers
+  become: yes
+  vars:
+    # Use ansible_user if defined, else fallback to root, but in typical Ubuntu it's often ubuntu or another user.
+    # We will assume root or a user with sudo privileges.
+    deploy_user: "{{ ansible_user | default('root') }}"
+
+  roles:
+    - docker
+    - inception
