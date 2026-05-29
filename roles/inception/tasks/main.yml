@@ -3,7 +3,7 @@
 
 - name: Define domain name variable
   set_fact:
-    domain_name: "{{ domain_name | default('cloud1.local') }}"
+    domain_name: "{{ domain_name | default('mlezcano.42.fr') }}"
 
 - name: Create required directories
   file:
