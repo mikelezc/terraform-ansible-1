@@ -35,7 +35,7 @@ Para el proyecto elegiremos *París (eu-west-3)* ya que es mejor una región eur
 
 - **Name**: `cloud-1-server`
 
-- **AMI (Amazon Machine Image)**: Seleccionamos **Ubuntu** y nos aseguramos de escoger `Ubuntu Server 22.04 LTS (HVM), SSD Volume Type`. Revisamos bien que debajo ponga "Free tier eligible".
+- **AMI (Amazon Machine Image)**: Seleccionamos **Amazon Linux** (por ejemplo, *Amazon Linux 2023*) y comprobamos que ponga "Free tier eligible".
 
 - **Instance Type**: Selecciona `t2.micro` (o `t3.micro` si t2 no está disponible en esa zona). Ambas son elegibles para la capa gratuita.
 
@@ -79,16 +79,32 @@ Abrimos el archivo `inventory.ini` dentro de la carpeta `42_Cloud-1` y lo modifi
 [cloud_1_servers]
 # Sustituye <TU_IP_PUBLICA> por la IP que hemos copiado (public IPv4 address de ec2)
 # Sustituye <RUTA_A_TU_ARCHIVO_PEM> por la ruta donde guardamos el archivo de claves
-aws_server ansible_host=<TU_IP_PUBLICA> ansible_user=ubuntu ansible_ssh_private_key_file=<RUTA_A_TU_ARCHIVO_PEM>
+aws_server ansible_host=<TU_IP_PUBLICA> ansible_user=ec2-user ansible_ssh_private_key_file=<RUTA_A_TU_ARCHIVO_PEM>
 ```
 
 Ejemplo de cómo debería quedar:
 ```ini
 [cloud_1_servers]
-aws_server ansible_host=3.250.150.99 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/cloud-1-key.pem
+aws_server ansible_host=3.250.150.99 ansible_user=ec2-user ansible_ssh_private_key_file=~/.ssh/cloud-1-key.pem
 ```
 
-*Nota: La AMI oficial de Ubuntu en AWS siempre utiliza `ubuntu` como usuario por defecto.*
+*Nota: Amazon Linux utiliza `ec2-user` como usuario por defecto. En Ubuntu seria `ubuntu`.*
+
+### Paso A.1: Verificamos la clave y el usuario
+
+1. Aseguramos permisos correctos de la clave:
+```bash
+chmod 400 ~/.ssh/cloud-1-key.pem
+```
+
+2. Probamos la conexion SSH manual (esto valida usuario y clave):
+```bash
+ssh -i ~/.ssh/cloud-1-key.pem ec2-user@TU_IP_PUBLICA
+```
+
+Si funciona, puedes salir con `exit` y seguir con Ansible.
+
+> Importante: en el inventario solo debe estar el host de AWS. Si hay un host local como `target_server`, eliminelo para evitar errores de `sudo` en tu maquina.
 
 ### Paso B: Ejecutamos Ansible
 
@@ -98,9 +114,11 @@ Abriremos una terminal, nos situamos en la carpeta del repo (`42_Cloud-1`) y eje
 ansible-playbook -i inventory.ini playbook.yml
 ```
 
+> Nota: si `ping` a la IP publica falla, no pasa nada. Por defecto AWS puede bloquear ICMP. Lo importante es que el puerto 22 (SSH) este abierto y la conexion SSH funcione.
+
 Qué ocurrirá a continuación:
 
-1. Ansible usará la llave `.pem` para conectarse como `ubuntu` a la máquina EC2 en AWS.
+1. Ansible usará la llave `.pem` para conectarse como `ec2-user` a la máquina EC2 en AWS.
 2. Pedirá permisos de root (`become: yes`) automáticamente.
 3. El rol `docker` instalará Docker y configurará los servicios desde cero.
 4. El rol `inception` montará el árbol de carpetas persistentes, copiará el `.env`, creará los certificados SSL auto-firmados de Nginx y desplegará toda la arquitectura de contenedores de WordPress, MariaDB y phpMyAdmin en el servidor.
@@ -112,7 +130,12 @@ Qué ocurrirá a continuación:
 El Subject detalla algunos puntos a tener en cuenta:
 
 - **Usuario Root**: "The student must connect as root using their email address or login as the root account."
-  - En AWS, entramos como `ubuntu`. Si en la evaluación nos piden estar como root puro, simplemente nos conectaremos a ec2 con `ssh -i ~/.ssh/cloud-1-key.pem ubuntu@IP` y una vez dentro ejecutaremos `sudo su -` para ser el usuario root de cara a la evaluación.
+  - En AWS no hay contraseña de root por defecto, se entra mediante escalada de privilegios. Si en la evaluación te piden ser el usuario root puro, primero conéctate por SSH normalmente: `ssh -i ~/.ssh/cloud-1-key.pem ec2-user@IP`.
+  - Una vez dentro, en vez de usar `su root` (que pide contraseña), ejecuta:
+    ```bash
+    sudo su -
+    ```
+  - Esto te convertirá en `root` instantáneamente y sin pedir contraseñas.
   
 - **Probamos la Redirección y los Certificados**: 
   - Abrimos en el navegador `http://IP`, el servidor Nginx forzará automáticamente que pasemos a usar HTTPS `https://IP`. Saldrá un aviso de "Sitio no seguro" (ya que el certificado SSL es auto-firmado, no emitido por Let's Encrypt), le daremos a "Configuración Avanzada > Continuar de todos modos" y veremos WordPress.

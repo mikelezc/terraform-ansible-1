@@ -63,13 +63,29 @@
     mode: '0600'
     force: no # Do not overwrite if it already exists
 
-- name: Ensure python3-cryptography is installed
-  apt:
-    name: python3-cryptography
+- name: Ensure cryptography module is installed
+  pip:
+    name: cryptography
     state: present
-    update_cache: yes
 
 - name: Launch docker-compose stack
   command: docker compose -f /home/{{ deploy_user }}/inception/docker-compose.yml up -d
   args:
     chdir: "/home/{{ deploy_user }}/inception"
+
+- name: Wait for WordPress to initialize wp-config.php (up to 30s)
+  wait_for:
+    path: "/home/{{ deploy_user }}/data/wordpress/wp-config.php"
+    state: present
+    timeout: 30
+  ignore_errors: true
+
+- name: Fix WordPress WP_HOME and WP_SITEURL for dynamic IPs
+  blockinfile:
+    path: "/home/{{ deploy_user }}/data/wordpress/wp-config.php"
+    marker: "// {mark} ANSIBLE MANAGED BLOCK FOR DYNAMIC IP"
+    insertbefore: "/* That's all, stop editing!"
+    content: |
+      define( 'WP_HOME', 'https://' . $_SERVER['HTTP_HOST'] );
+      define( 'WP_SITEURL', 'https://' . $_SERVER['HTTP_HOST'] );
+  ignore_errors: true

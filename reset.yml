@@ -1,0 +1,27 @@
+---
+- name: Reset AWS EC2 Environment for Cloud-1 Demo
+  hosts: cloud_1_servers
+  become: yes
+  vars:
+    deploy_user: "{{ ansible_user | default('ec2-user') }}"
+
+  tasks:
+    - name: Stop and remove Docker compose stack
+      command: docker compose -f /home/{{ deploy_user }}/inception/docker-compose.yml down -v
+      args:
+        chdir: "/home/{{ deploy_user }}/inception"
+      ignore_errors: true
+
+    - name: Prune all Docker containers, images, and volumes
+      command: docker system prune -a --volumes -f
+      ignore_errors: true
+
+    - name: Remove Cloud-1 deployment directory
+      file:
+        path: "/home/{{ deploy_user }}/inception"
+        state: absent
+
+    - name: Remove persistent data directory
+      file:
+        path: "/home/{{ deploy_user }}/data"
+        state: absent

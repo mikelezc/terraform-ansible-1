@@ -53,7 +53,7 @@ El código está estructurado en *Roles* para mantener un diseño limpio, reutil
 
 ## 3. Guía de Despliegue
 
-Para desplegar este proyecto, necesitamos un servidor remoto (por ejemplo, una máquina en AWS, GCP, Scaleway o una máquina virtual local tipo Multipass/Vagrant) que ejecute **Ubuntu 22.04 LTS**.
+Para desplegar este proyecto, necesitamos un servidor remoto (por ejemplo, una máquina en AWS, GCP, Scaleway o una máquina virtual local tipo Multipass/Vagrant) que ejecute **Amazon Linux** (o cualquier distro compatible con Docker).
 
 Nosotros utilizaremos un EC2 en AWS.
 
@@ -78,11 +78,11 @@ Abrimos el archivo `inventory.ini`. Vemos algo como esto:
 target_server ansible_host=localhost ansible_connection=local
 ```
 
-Lo cambiaremos por la IP real de nuestro servidor y el usuario remoto (por lo general `root` o `ubuntu`):
+Lo cambiaremos por la IP real de nuestro servidor y el usuario remoto (por lo general `root` o `ec2-user` en Amazon Linux):
 
 ```ini
 [cloud_1_servers]
-servidor_produccion ansible_host=203.0.113.50 ansible_user=root
+servidor_produccion ansible_host=203.0.113.50 ansible_user=ec2-user
 ```
 
 ### Paso 3: Configurar Secretos (Opcional)
@@ -97,16 +97,27 @@ Lanzamos Ansible con el siguiente comando:
 ```bash
 ansible-playbook -i inventory.ini playbook.yml
 ```
-Ansible se conectará a la máquina, instalará Docker, montará la arquitectura y arrancará los contenedores solo con este comando
+  Ansible se conectará a la máquina, instalará Docker, montará la arquitectura y generará automáticamente los certificados SSL, la inyección de las variables de IP dinámica (`HTTP_HOST`) y arrancará los contenedores. Solo con este comando levantarás toda la infraestructura en cualquier IP pública.
 
-### Paso 5: Verificación
+  ### Paso 5: Limpiar el entorno para la Demostración (Reset)
 
-Abrimos tu navegador y entramos a:
-- `http://<IP_DE_TU_SERVIDOR>` (no redirigirá a HTTPS y mostrará WordPress).
-- `https://<IP_DE_TU_SERVIDOR>/phpmyadmin/` (nos mostrará la pantalla de inicio de sesión de phpMyAdmin, donde podemos entrar con el usuario y clave de la base de datos).
+  Para las evaluaciones (o si quieres dejar el EC2 completamente en blanco), puedes destruir fácilmente todo el entorno para demostrar su completo funcionamiento automatizado usando nuestro Playbook de reset:
+  
+  ```bash
+  ansible-playbook -i inventory.ini reset.yml
+  ```
+  Este playbook:
+  1. Detendrá todos los servicios (`docker compose down -v`).
+  2. Eliminará todas las imágenes locales forzando a descargarlas de nuevo (`docker system prune -a --volumes -f`).
+  3. Eliminará la carpeta estructural completa del proyecto en el servidor remoto (`~/inception`).
+  4. Borrará todo el sistema de permanencia de las bases de datos y la web (`~/data`).
 
----
+  Dejando la máquina completamente virgen para volver a lanzar un `playbook.yml`.
 
+  ### Paso 6: Verificación
+
+  Abrimos tu navegador y entramos a:
+  - `https://<IP_DE_TU_SERVIDOR>` (redirigirá a HTTPS y mostrará WordPress de manera correcta indiferentemente de lo que cambie tu IP).
 ## 4. Puntos Importantes 
 
 El *Subject* del proyecto nos destaca varios detalles cruciales:
