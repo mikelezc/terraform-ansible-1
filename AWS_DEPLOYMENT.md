@@ -8,7 +8,7 @@ El *Subject* de Cloud-1 hace especial énfasis en el manejo de costes y la respo
 
 ## 1. Capa Gratuita de AWS
 
-Cuando creamos una cuenta nueva en AWS, obtendremos 12 meses de "Free Tier". Para este proyecto, debemos tener en cuenta:
+Cuando creamos una cuenta nueva en AWS, obtendremos 6 meses de capa gratuita. Para este proyecto, debemos tener en cuenta:
 
 - **Instancia (EC2)**: Tenemos derecho a **750 horas al mes** de una instancia `t2.micro` o `t3.micro`. 
 Por lo que si mantienes **una sola** instancia encendida 24/7 en el mes, no nos cobrarán (un mes tiene máximo 744 horas), pero si enciendemos dos a la vez, el tiempo se consume el doble de rápido.
@@ -77,7 +77,7 @@ Abrimos el archivo `inventory.ini` dentro de la carpeta `42_Cloud-1` y lo modifi
 
 ```ini
 [cloud_1_servers]
-# Sustituye <TU_IP_PUBLICA> por la IP que hemos copiado (ublic IPv4 address de ec2)
+# Sustituye <TU_IP_PUBLICA> por la IP que hemos copiado (public IPv4 address de ec2)
 # Sustituye <RUTA_A_TU_ARCHIVO_PEM> por la ruta donde guardamos el archivo de claves
 aws_server ansible_host=<TU_IP_PUBLICA> ansible_user=ubuntu ansible_ssh_private_key_file=<RUTA_A_TU_ARCHIVO_PEM>
 ```
