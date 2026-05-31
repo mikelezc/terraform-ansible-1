@@ -321,10 +321,13 @@ Abrimos esa URL en el navegador. Veremos WordPress funcionando con HTTPS.
 Abrimos las herramientas de desarrollo del navegador (F12 → Network) y recargamos la página varias veces. 
 Buscamos la cabecera de respuesta `X-Served-By`: veremos que cambia entre diferentes nombres de instancia, demostrando que el Nginx LB está distribuyendo las peticiones.
 
+![Cabecera X-Served-By en DevTools mostrando el servidor que atendió la petición](guide_photos/x_served_by.png)
+
+Si queremos hacerlo desde la terminal con curl
+
 ```bash
-# Desde terminal, refrescamos 6 veces y ver qué servidor responde:
 for i in $(seq 1 6); do
-  curl -sk https://TU_CLOUDFRONT_DOMAIN/ -I | grep X-Served-By
+  curl -sk https://TU_CLOUDFRONT_DOMAIN/ -I | grep -i x-served-by
 done
 ```
 
@@ -335,6 +338,8 @@ En las herramientas de desarrollo (F12 → Network), recargamos la página dos v
 ```
 x-cache: Hit from cloudfront
 ```
+
+![Cabecera caché cloudfront](guide_photos/hit_from_cloudfront.png)
 
 Esto demuestra que CloudFront está cacheando y sirviendo los assets estáticos.
 
@@ -415,20 +420,26 @@ terraform show
 ### Reiniciar los contenedores en el servidor de base de datos
 
 ```bash
-ssh -i ~/.ssh/cloud-1-key.pem ubuntu@$(terraform output -raw db_public_ip)
-cd /home/ubuntu/db
-docker compose restart
+# Desde la carpeta 42_Cloud-1/ (donde está inventory.ini):
+cd 42_Cloud-1
+DB_IP=$(grep -A1 '^\[db\]' inventory.ini | tail -1 | awk '{print $1}')
+ssh -i ~/.ssh/cloud-1-key.pem ubuntu@$DB_IP
+# Una vez dentro del servidor:
+cd /home/ubuntu/db && docker sudo compose restart
 ```
 
 ### Conectarse al Nginx LB
 
 ```bash
-ssh -i ~/.ssh/cloud-1-key.pem ubuntu@$(terraform output -raw lb_public_ip)
+# Desde la carpeta 42_Cloud-1/:
+cd 42_Cloud-1
+LB_IP=$(grep -A1 '^\[lb\]' inventory.ini | tail -1 | awk '{print $1}')
+ssh -i ~/.ssh/cloud-1-key.pem ubuntu@$LB_IP
 
-# Vemos la configuración de nginx generada por Ansible:
+# Una vez dentro, ver la configuración de nginx generada por Ansible:
 cat /home/ubuntu/lb/nginx.conf
 
-# Vemos los logs del LB:
+# Ver los logs del LB:
 docker logs nginx-lb
 ```
 
