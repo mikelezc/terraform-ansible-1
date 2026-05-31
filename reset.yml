@@ -1,9 +1,32 @@
 ---
-# Reset playbook — destroys the deployed environment on the DB server
-# Web instances are ephemeral (ASG) — terminate them via AWS Console or:
-#   aws autoscaling set-desired-capacity --auto-scaling-group-name cloud1-web-asg --desired-capacity 0
+# Reset playbook — destroys the deployed environment on LB and DB servers.
+# Web instances are ephemeral (ASG) — terminate them via AWS Console or scale to 0:
+#   aws autoscaling set-desired-capacity \
+#     --auto-scaling-group-name cloud1-web-asg --desired-capacity 0
 #
-# Full infrastructure teardown: cd terraform && terraform destroy
+# Full infrastructure teardown (recommended): cd terraform && terraform destroy
+
+- name: Reset load balancer
+  hosts: lb
+  become: yes
+  vars:
+    deploy_user: ubuntu
+
+  tasks:
+    - name: Stop Nginx LB Docker compose stack
+      command: docker compose -f /home/{{ deploy_user }}/lb/docker-compose.yml down -v
+      args:
+        chdir: /home/{{ deploy_user }}/lb
+      ignore_errors: true
+
+    - name: Prune Docker resources on LB
+      command: docker system prune -a --volumes -f
+      ignore_errors: true
+
+    - name: Remove LB deployment directory
+      file:
+        path: /home/{{ deploy_user }}/lb
+        state: absent
 
 - name: Reset database server environment
   hosts: db

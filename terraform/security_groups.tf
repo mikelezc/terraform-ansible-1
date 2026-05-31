@@ -1,8 +1,8 @@
-# ─── ALB Security Group ────────────────────────────────────────────────────────
-# Public-facing: accepts HTTP/HTTPS from anywhere, SSH from deployer IP only
-resource "aws_security_group" "alb" {
-  name        = "${var.project_name}-alb-sg"
-  description = "ALB: allow HTTP/HTTPS from internet"
+# ─── Load Balancer Security Group ─────────────────────────────────────────────
+# Public-facing EC2 Nginx LB: HTTP/HTTPS from anywhere, SSH from deployer only
+resource "aws_security_group" "lb" {
+  name        = "${var.project_name}-lb-sg"
+  description = "Nginx LB: HTTP/HTTPS from internet, SSH from deployer"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
@@ -21,6 +21,14 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "SSH from deployer"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.my_ip]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -29,24 +37,24 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name    = "${var.project_name}-alb-sg"
+    Name    = "${var.project_name}-lb-sg"
     Project = var.project_name
   }
 }
 
 # ─── Web Instances Security Group ──────────────────────────────────────────────
-# Only receives HTTP from ALB; SSH from deployer IP only
+# Only receives HTTP from the Nginx LB; SSH from deployer only
 resource "aws_security_group" "web" {
   name        = "${var.project_name}-web-sg"
-  description = "Web instances: HTTP from ALB only"
+  description = "Web instances: HTTP from LB only, SSH from deployer"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
-    description     = "HTTP from ALB"
+    description     = "HTTP from Nginx LB"
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
+    security_groups = [aws_security_group.lb.id]
   }
 
   ingress {
@@ -71,7 +79,7 @@ resource "aws_security_group" "web" {
 }
 
 # ─── Database Security Group ───────────────────────────────────────────────────
-# MariaDB only accessible from web instances and from deployer (SSH only)
+# MariaDB only accessible from web instances; SSH from deployer only
 resource "aws_security_group" "db" {
   name        = "${var.project_name}-db-sg"
   description = "DB: MariaDB from web SG only, SSH from deployer"

@@ -56,18 +56,11 @@ resource "aws_autoscaling_group" "web" {
     version = "$Latest"
   }
 
-  target_group_arns = [aws_lb_target_group.web.arn]
-
-  health_check_type         = "ELB"
-  health_check_grace_period = 600 # 10 min — cloud-init + Docker + WP init can take time
-
-  # Replace unhealthy instances automatically
-  instance_refresh {
-    strategy = "Rolling"
-    preferences {
-      min_healthy_percentage = 50
-    }
-  }
+  # EC2 health check: ASG replaces instances that fail AWS EC2 status checks
+  # (e.g. hardware failure, manual termination). This gives us HA auto-restart.
+  # Application-level health check is handled by Nginx passive failover.
+  health_check_type         = "EC2"
+  health_check_grace_period = 600 # 10 min — cloud-init + Docker + WP init
 
   tag {
     key                 = "Name"
@@ -86,7 +79,9 @@ resource "aws_autoscaling_group" "web" {
   }
 }
 
-# Scale up policy — for scalability demo
+# ─── Scaling policies ──────────────────────────────────────────────────────────
+# These allow demonstrating automatic scaling based on CPU load
+
 resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${var.project_name}-scale-up"
   autoscaling_group_name = aws_autoscaling_group.web.name
@@ -95,7 +90,6 @@ resource "aws_autoscaling_policy" "scale_up" {
   cooldown               = 120
 }
 
-# Scale down policy
 resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${var.project_name}-scale-down"
   autoscaling_group_name = aws_autoscaling_group.web.name
@@ -104,7 +98,6 @@ resource "aws_autoscaling_policy" "scale_down" {
   cooldown               = 300
 }
 
-# CloudWatch alarm: CPU > 70% → scale up
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   alarm_name          = "${var.project_name}-cpu-high"
   comparison_operator = "GreaterThanThreshold"
@@ -122,7 +115,6 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   }
 }
 
-# CloudWatch alarm: CPU < 30% → scale down
 resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   alarm_name          = "${var.project_name}-cpu-low"
   comparison_operator = "LessThanThreshold"

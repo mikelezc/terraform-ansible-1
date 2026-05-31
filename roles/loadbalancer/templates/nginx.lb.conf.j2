@@ -1,0 +1,59 @@
+# Nginx load balancer configuration
+# Upstream: private IPs of ASG web instances (discovered by Ansible at deploy time)
+# Re-run Ansible after scaling to refresh this list.
+
+upstream wordpress_backends {
+{% for ip in web_instance_ips %}
+    server {{ ip }}:80 max_fails=3 fail_timeout=30s;
+{% endfor %}
+}
+
+# HTTP: forward to backends (CloudFront uses this)
+server {
+    listen 80;
+    server_name _;
+
+    # Logging
+    access_log /var/log/nginx/access.log;
+    error_log  /var/log/nginx/error.log;
+
+    location / {
+        proxy_pass         http://wordpress_backends;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+
+        # Timeouts (cloud-init may make backends slow on first request)
+        proxy_connect_timeout 10s;
+        proxy_read_timeout    60s;
+    }
+}
+
+# HTTPS: TLS termination with self-signed cert (for direct LB access)
+# CloudFront talks to port 80 only; this is for direct browser access.
+server {
+    listen 443 ssl;
+    server_name _;
+
+    ssl_certificate     /etc/nginx/ssl/server.crt;
+    ssl_certificate_key /etc/nginx/ssl/server.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    access_log /var/log/nginx/access.log;
+    error_log  /var/log/nginx/error.log;
+
+    location / {
+        proxy_pass         http://wordpress_backends;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto https;
+
+        proxy_connect_timeout 10s;
+        proxy_read_timeout    60s;
+    }
+}

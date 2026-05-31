@@ -1,12 +1,12 @@
 resource "aws_cloudfront_distribution" "wordpress" {
   comment     = "${var.project_name} WordPress CDN"
   enabled     = true
-  price_class = "PriceClass_100" # Use only North America and Europe (cheapest)
+  price_class = "PriceClass_100" # North America + Europe only (cheapest)
 
-  # Origin: ALB (HTTP only — CloudFront terminates HTTPS for users)
+  # Origin: Nginx LB EC2 via Elastic IP (HTTP only — CloudFront terminates HTTPS)
   origin {
-    domain_name = aws_lb.main.dns_name
-    origin_id   = "${var.project_name}-alb-origin"
+    domain_name = aws_eip.lb.public_ip
+    origin_id   = "${var.project_name}-lb-origin"
 
     custom_origin_config {
       http_port              = 80
@@ -15,16 +15,16 @@ resource "aws_cloudfront_distribution" "wordpress" {
       origin_ssl_protocols   = ["TLSv1.2"]
     }
 
-    # Forward Host header so WordPress sees the right domain
+    # Tell backend that the original request arrived over HTTPS
     custom_header {
       name  = "X-Forwarded-Proto"
       value = "https"
     }
   }
 
-  # Default behavior: forward everything to ALB (dynamic content)
+  # Default behavior: pass-through for dynamic content (WP admin, posts, etc.)
   default_cache_behavior {
-    target_origin_id       = "${var.project_name}-alb-origin"
+    target_origin_id       = "${var.project_name}-lb-origin"
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods         = ["GET", "HEAD"]
@@ -44,10 +44,10 @@ resource "aws_cloudfront_distribution" "wordpress" {
     max_ttl     = 0
   }
 
-  # Cache behavior for WordPress static assets — these are served from CDN cache
+  # Cache WordPress theme/plugin assets — this is what makes it a CDN
   ordered_cache_behavior {
     path_pattern           = "/wp-content/*"
-    target_origin_id       = "${var.project_name}-alb-origin"
+    target_origin_id       = "${var.project_name}-lb-origin"
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
@@ -68,7 +68,7 @@ resource "aws_cloudfront_distribution" "wordpress" {
 
   ordered_cache_behavior {
     path_pattern           = "/wp-includes/*"
-    target_origin_id       = "${var.project_name}-alb-origin"
+    target_origin_id       = "${var.project_name}-lb-origin"
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
@@ -93,7 +93,7 @@ resource "aws_cloudfront_distribution" "wordpress" {
     }
   }
 
-  # Use CloudFront's default certificate (for *.cloudfront.net domain)
+  # Default CloudFront certificate (for *.cloudfront.net domain)
   viewer_certificate {
     cloudfront_default_certificate = true
   }

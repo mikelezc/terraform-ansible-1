@@ -1,5 +1,5 @@
 output "cloudfront_domain" {
-  description = "CloudFront distribution domain — use this URL to access the site"
+  description = "CloudFront distribution domain — primary site URL"
   value       = "https://${aws_cloudfront_distribution.wordpress.domain_name}"
 }
 
@@ -8,9 +8,9 @@ output "cloudfront_raw_domain" {
   value       = aws_cloudfront_distribution.wordpress.domain_name
 }
 
-output "alb_dns_name" {
-  description = "ALB DNS name (internal, not for direct access)"
-  value       = aws_lb.main.dns_name
+output "lb_public_ip" {
+  description = "Nginx LB Elastic IP — also the CloudFront origin and DuckDNS target"
+  value       = aws_eip.lb.public_ip
 }
 
 output "db_public_ip" {
@@ -34,7 +34,7 @@ output "s3_config_bucket" {
 }
 
 output "asg_name" {
-  description = "Auto Scaling Group name"
+  description = "Auto Scaling Group name — used by Ansible loadbalancer role to discover web instance IPs"
   value       = aws_autoscaling_group.web.name
 }
 
@@ -46,17 +46,19 @@ output "deploy_instructions" {
     CLOUD-1 INFRASTRUCTURE READY
     ============================================================
 
-    1. Run Ansible to configure the database:
-       cd ../42_Cloud-1
+    LB Elastic IP:     ${aws_eip.lb.public_ip}
+    Site URL:          https://${aws_cloudfront_distribution.wordpress.domain_name}
+
+    1. Configure LB + DB with Ansible:
+       cd ..
        ansible-playbook -i inventory.ini playbook.yml
 
-    2. Wait 3-5 minutes for web instances to bootstrap via cloud-init
+    2. Wait 5 minutes for web instances to bootstrap via cloud-init
 
-    3. Access your WordPress site:
-       ${aws_cloudfront_distribution.wordpress.domain_name}
+    3. Access site: https://${aws_cloudfront_distribution.wordpress.domain_name}
 
-    4. Scale up for demo:
-       terraform apply -var="web_desired=4"
+    4. After scaling (terraform apply -var="web_desired=N"), update nginx:
+       ansible-playbook -i inventory.ini playbook.yml -l lb
 
     5. Destroy everything when done:
        terraform destroy

@@ -1,7 +1,6 @@
-# Auto-generates the Ansible inventory file from Terraform outputs.
-# Web instances are managed by cloud-init — only the DB needs Ansible.
 resource "local_file" "ansible_inventory" {
   content = templatefile("${path.module}/inventory.tpl", {
+    lb_public_ip         = aws_eip.lb.public_ip
     db_public_ip         = aws_instance.db.public_ip
     db_private_ip        = aws_instance.db.private_ip
     efs_dns_name         = aws_efs_file_system.wordpress.dns_name
@@ -13,6 +12,8 @@ resource "local_file" "ansible_inventory" {
     db_user              = var.db_user
     db_password          = var.db_password
     db_root_password     = var.db_root_password
+    asg_name             = aws_autoscaling_group.web.name
+    aws_region           = var.aws_region
   })
   filename        = "${path.module}/../inventory.ini"
   file_permission = "0644"

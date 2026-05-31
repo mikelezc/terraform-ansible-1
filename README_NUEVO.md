@@ -1,31 +1,35 @@
 # Cloud-1: Infraestructura Multi-Servidor en AWS
 
-Este documento es la guía completa de la arquitectura y el despliegue del proyecto Cloud-1 en su versión final: multi-servidor, con balanceo de carga, alta disponibilidad, CDN y automatización total mediante Terraform y Ansible.
+Este documento es la guía completa de la arquitectura y el despliegue del proyecto Cloud-1 de 42. 
+Multi-servidor, con balanceo de carga Nginx, alta disponibilidad, CDN y automatización total mediante Terraform y Ansible.
 
 ---
 
 ## 1. Conceptos Fundamentales del Proyecto
 
-La diferencia clave respecto al README anterior es que ya no levantamos **un solo servidor** con todo dentro. Ahora la infraestructura se distribuye entre varias máquinas especializadas, y todo se aprovisiona mediante **dos capas de automatización**:
+La infraestructura se distribuye entre varias máquinas especializadas, y todo se aprovisiona mediante **dos capas de automatización**:
 
 ### Infraestructura como Código (IaC) con Terraform
 
-Terraform es la herramienta que nos permite describir en código HCL (HashiCorp Configuration Language) qué recursos de AWS queremos crear. Es el equivalente a un presupuesto de obra: le dices "quiero tres instancias EC2, un balanceador de carga y un sistema de ficheros compartido", y Terraform lo construye todo.
+Terraform nos permite describir en código HCL (HashiCorp Configuration Language) qué recursos de AWS queremos crear y desplegar.
 
-Lo más importante de Terraform es que gestiona el **estado** de tu infraestructura. Si ejecutas `terraform apply` dos veces, solo aplicará los cambios que no existan todavía. Y si ejecutas `terraform destroy`, eliminará absolutamente todo lo que creó, dejando tu cuenta de AWS limpia y sin costes.
+Además, gestiona el **estado** de la infraestructura. Si ejecutamos `terraform apply` dos veces, solo aplicará los cambios que no existían todavía (idempotencia).
+
+Si ejecutamos `terraform destroy`, se eliminará absolutamente todo lo que se creó, dejando la cuenta de AWS limpia y sin costes.
 
 ### Configuración de Servidores con Ansible
 
-Ansible sigue siendo la herramienta para configurar el interior de cada máquina. En esta versión, Ansible solo configura el servidor de base de datos (MariaDB), porque las instancias web se auto-configuran solas al arrancar mediante un script de `cloud-init` (más sobre esto en la sección de arquitectura).
+Ansible configura el **load balancer** (EC2-LB) y el **servidor de base de datos** (EC2-DB). 
 
-### La regla de oro sigue siendo la misma
+Las instancias web se auto-configuran solas al arrancar mediante un script de `cloud-init` (más sobre esto en la sección de arquitectura).
 
 **1 contenedor = 1 proceso**. Los servicios que corren son:
 
-- **Nginx**: Servidor web y *Reverse Proxy* en las instancias web.
-- **WordPress (PHP-FPM)**: La aplicación en PHP.
+- **Nginx LB**: Balanceador de carga, en su propia instancia EC2 dedicada.
+- **Nginx Web**: Servidor web y *Reverse Proxy* en cada instancia web.
+- **WordPress (PHP-FPM)**: La aplicación en PHP, también en cada instancia web.
+- **phpMyAdmin**: Interfaz web de administración de la base de datos, también en cada instancia web.
 - **MariaDB**: Base de datos, en su propia instancia EC2 dedicada.
-- **phpMyAdmin**: Interfaz web de administración de la base de datos.
 
 ---
 
@@ -41,13 +45,17 @@ Ansible sigue siendo la herramienta para configurar el interior de cada máquina
               │   - HTTPS para el usuario
               │   - Caché de /wp-content/*
               └────────────┬────────────┘
-                           │ HTTP (interno)
+                           │ HTTP (puerto 80, interno)
                            ▼
               ┌─────────────────────────┐
-              │  Application Load       │
-              │  Balancer (ALB)         │
-              │  - Distribuye tráfico   │
-              │  - Health checks        │
+              │  EC2-LB (t3.micro)      │
+              │  Ubuntu 22.04           │
+              │  Elastic IP (estable)   │
+              │  Docker: Nginx LB       │
+              │  - Round-robin a webs   │
+              │  - Failover pasivo      │
+              │  - Puerto 443 con cert  │
+              │    auto-firmado         │
               └──────┬──────────┬───────┘
                      │          │  Round-robin
            ┌─────────┘          └─────────┐
@@ -65,7 +73,7 @@ Ansible sigue siendo la herramienta para configurar el interior de cada máquina
                          │ puerto 3306 (red privada AWS)
                          ▼
               ┌─────────────────────────┐
-              │  EC2-DB                 │
+              │  EC2-DB (t3.micro)      │
               │  Ubuntu 22.04           │
               │  Docker: MariaDB        │
               │  (solo accesible desde  │
@@ -91,23 +99,31 @@ Ansible sigue siendo la herramienta para configurar el interior de cada máquina
 
 | Componente | Por qué lo necesitamos |
 |---|---|
-| **CloudFront** | CDN: cachea assets estáticos (CSS, JS, imágenes) cerca del usuario. Requisito obligatorio de la defensa. |
-| **ALB** | Distribuye las peticiones entre las instancias web de forma automática. Necesario para que el Auto Scaling Group sepa qué instancias están sanas. |
-| **Auto Scaling Group** | Mantiene siempre un mínimo de 2 instancias. Si una cae, lanza otra automáticamente. Permite escalar horizontalmente. |
-| **EC2-DB separado** | El subject exige que la base de datos esté en una máquina distinta a las web. |
-| **EFS** | Sistema de ficheros de red. Si subes una imagen desde la instancia web-1, también aparece en web-2. Sin esto, cada servidor tendría su propio disco y las imágenes no sincronizarían. |
-| **S3** | Las instancias del Auto Scaling Group se lanzan automáticamente (sin intervención humana). Necesitan descargar su configuración de algún sitio. S3 es el repositorio centralizado. |
+| **CloudFront** | CDN: cachea assets estáticos (CSS, JS, imágenes) cerca del usuario. |
+| **EC2-LB + Nginx** | Distribuye peticiones entre instancias web en round-robin. Failover pasivo: si un backend no responde, Nginx lo descarta y usa los demás. Elastic IP estable → DuckDNS puede apuntar a ella. Coste: $0 (t3.micro free tier). |
+| **Auto Scaling Group** | Mantiene siempre un mínimo de 2 instancias web. Si una cae (hardware failure, terminación manual), ASG lanza otra automáticamente. Permite escalar horizontalmente. |
+| **EC2-DB separado** | La base de datos esté en una máquina distinta a las web. |
+| **EFS** | Sistema de ficheros de red compartido. Cuando subes una imagen en la instancia web-1, también aparece en web-2. Sin esto, cada servidor tendría su propio disco y las imágenes no sincronizarían. |
+| **S3** | Las instancias del Auto Scaling Group se lanzan automáticamente. Necesitan descargar su configuración de algún sitio al arrancar. S3 es el repositorio centralizado de configuración. |
+
+### Por qué usamos Nginx como LB en lugar de AWS ALB
+
+El proyecto Inception original del que pàrtimos ya usaba Nginx como load balancer y punto de entrada. 
+Usar un EC2 con Nginx como load balancer es:
+- **Más barato**: el ALB de AWS no tiene free tier; un t3.micro adicional sí entra en free tier.
+- **Más explicable como proyecto pedagógico**: podemos ver el fichero `nginx.conf` con el bloque `upstream` y entender exactamente cómo funciona el balanceo.
+- **Trade-off**: cuando el ASG crea una nueva instancia (por escalado o HA), hay que re-ejecutar Ansible en el LB para que Nginx aprenda la nueva IP (`ansible-playbook -i inventory.ini playbook.yml -l lb`).
 
 ---
 
-## 3. Cómo Funciona el Auto-arranque (cloud-init)
+## 3. Cómo Funciona el Auto-arranque de Instancias Web (cloud-init)
 
-Este es el concepto más importante de esta arquitectura. Cuando el Auto Scaling Group crea una nueva instancia web (ya sea al arrancar, al escalar o al reemplazar una caída), ejecuta automáticamente el script `terraform/user_data.sh.tpl` en el primer arranque. Este script:
+Cuando el Auto Scaling Group crea una nueva instancia web, ejecuta automáticamente el script `terraform/user_data.sh.tpl` en el primer arranque. Este script:
 
 1. Instala Docker y las dependencias necesarias.
 2. Monta el EFS en `/home/ubuntu/data/wordpress` (ficheros compartidos de WordPress).
 3. Descarga `docker-compose.yml`, `nginx.conf` y `.env` del bucket S3.
-4. Genera el certificado SSL auto-firmado para Nginx.
+4. Genera el certificado SSL auto-firmado.
 5. Arranca los contenedores con `docker compose up -d`.
 6. Espera a que WordPress cree `wp-config.php` y lo parchea para que funcione con HTTPS y con el CDN de CloudFront.
 
@@ -117,7 +133,7 @@ Todo esto ocurre sin que el operador haga nada. El Auto Scaling Group lo gestion
 
 ## 4. Prerrequisitos
 
-Antes de ejecutar cualquier cosa, necesitamos tener preparado lo siguiente en nuestra máquina local:
+Antes de ejecutar cualquier cosa, necesitamos configurar lo siguiente en la máquina local:
 
 ### Herramientas
 
@@ -145,110 +161,119 @@ aws configure
 
 ### Key pair de AWS
 
-Las instancias EC2 necesitan un par de claves SSH para que Ansible pueda conectarse al servidor de base de datos. Si no tienes uno:
+Las instancias EC2 necesitan un par de claves SSH para que Ansible pueda conectarse. Para crearlas:
 
-1. Ve a AWS Console → EC2 → Key Pairs → Create key pair.
-2. Nómbralo `cloud-1-key`, elige formato `.pem`.
-3. Guarda el fichero descargado en `~/.ssh/cloud-1-key.pem`.
-4. Dale permisos correctos:
+1. Vamos a AWS Console → EC2 → Key Pairs → Create key pair.
+2. Ponemos nombre `cloud-1-key`, y elegimos el formato `.pem`.
+3. Guardamos el fichero en nuestra máquina local `~/.ssh/cloud-1-key.pem`.
+4. Otorgamos permisos correctos:
 
 ```bash
 chmod 400 ~/.ssh/cloud-1-key.pem
 ```
 
-> **Importante**: El key pair debe existir en la región `eu-west-3`. Si lo creaste en otra región, no funcionará.
+> **Importante**: El key pair debe existir en la región `eu-west-3` por como está creado nuestro código. 
 
 ---
 
-## 5. Configuración Inicial (solo la primera vez)
+## 5. Configuración Inicial
 
 ### Paso 1: Configurar variables secretas
 
-Entra en la carpeta `terraform/` y copia el fichero de ejemplo:
+Entramos en la carpeta `terraform/` y copia el fichero de ejemplo:
 
 ```bash
 cd 42_Cloud-1/terraform
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edita `terraform.tfvars` con tus valores reales:
+Editamos `terraform.tfvars` con los valores reales:
 
 ```hcl
-# Tu IP pública actual (para restringir el acceso SSH solo a tu máquina)
-# Puedes obtenerla con: curl ifconfig.me
+# Nuestra IP pública actual (para restringir SSH solo a tu máquina)
+# Podemos obtenerla con: curl ifconfig.me
 my_ip = "1.2.3.4/32"
 
-# Nombre del key pair que creaste en AWS eu-west-3
+# Nombre del key pair que creamos en AWS eu-west-3
 key_name = "cloud-1-key"
 
-# Contraseñas de la base de datos (cámbialas por unas seguras)
+# Contraseñas de la base de datos (las cambiaremos)
 db_password      = "mi_password_seguro"
 db_root_password = "mi_root_password_seguro"
+
+# Opcional: DuckDNS (si queremos un dominio concreto)
+# duckdns_token     = "tu-token-de-duckdns"
+# duckdns_subdomain = "mlezcano-cloud1"
 ```
 
-> **Nunca subas `terraform.tfvars` a git.** Ya está en el `.gitignore`. Contiene tus contraseñas.
+> **IMPORATNTE: Nunca subiremos `terraform.tfvars` a git.** Está incluido en el `.gitignore`. Contiene las contraseñas vulnerables.
 
-### Paso 2: Configurar credenciales de base de datos para Ansible
+### Paso 2 (Opcional): DuckDNS
 
-Ansible usará las contraseñas directamente desde el `inventory.ini` que genera Terraform automáticamente. No necesitas configurar nada adicional.
+Si queremos un dominio personalizado (`mlezcano-cloud1.duckdns.org`):
+
+1. Crea una cuenta en [duckdns.org](https://www.duckdns.org) y creamos el subdominio.
+2. Copiamos el token que aparece en la cuenta.
+3. Lo añadiremos en `terraform.tfvars`.
+
+Terraform actualizará automáticamente el registro DNS con la IP del LB al hacer `terraform apply`.
 
 ---
 
 ## 6. Despliegue Completo
 
-### Fase 1: Infraestructura con Terraform (~20 minutos)
+### Fase 1: Infraestructura con Terraform
 
 ```bash
 cd 42_Cloud-1/terraform
 
-# Descarga los plugins de Terraform (solo la primera vez)
+# Descargamos los plugins de Terraform (solo la primera vez)
 terraform init
 
-# Previsualiza qué va a crear (opcional pero recomendado)
+# Previsualizamos qué se va a crear (opcional pero recomendado)
 terraform plan
 
-# Crea toda la infraestructura en AWS
+# Creamos toda la infraestructura en AWS
 terraform apply
 ```
 
-Terraform te pedirá confirmación escribiendo `yes`. A continuación creará, en este orden aproximado:
+Terraform creará, en orden aproximado:
 
-1. Security Groups y roles IAM.
-2. Bucket S3 y sube la configuración.
+1. Security Groups e IAM roles.
+2. Bucket S3 y sube la configuración renderizada.
 3. Sistema de ficheros EFS.
-4. EC2 de base de datos.
-5. ALB y target group.
-6. CloudFront (esto tarda ~15 minutos, es normal).
+4. EC2-DB (base de datos) y EC2-LB (load balancer).
+5. Elastic IP asociada al EC2-LB.
+6. CloudFront (esto tarda ~15 minutos — es normal).
 7. Auto Scaling Group con las instancias web.
 8. Genera el fichero `inventory.ini` para Ansible.
 
-Al finalizar, verás los outputs:
+Al finalizar, veremos los outputs:
 
 ```
-cloudfront_domain    = "https://d1abc123xyz.cloudfront.net"
-db_public_ip         = "15.188.xx.xx"
-efs_dns_name         = "fs-xxxxxxxx.efs.eu-west-3.amazonaws.com"
+cloudfront_domain = "https://d1abc123xyz.cloudfront.net"
+lb_public_ip      = "15.188.xx.xx"
+db_public_ip      = "35.180.xx.xx"
 ```
 
-La URL de CloudFront es la dirección de tu sitio.
+La URL de CloudFront es la dirección del sitio.
 
-### Fase 2: Configurar la base de datos con Ansible (~2 minutos)
-
-Una vez Terraform ha terminado, el `inventory.ini` se ha generado automáticamente con la IP real del servidor de base de datos. Lanzamos Ansible:
+### Fase 2: Configurar LB y Base de Datos con Ansible
 
 ```bash
-cd ..  # Vuelve a la carpeta 42_Cloud-1/
+cd ..  # Vuelve a 42_Cloud-1/
 ansible-playbook -i inventory.ini playbook.yml
 ```
 
-Ansible se conectará al EC2 de base de datos, instalará Docker y arrancará MariaDB con las credenciales que definiste en `terraform.tfvars`.
+Ansible hará dos cosas en paralelo:
 
-### Fase 3: Esperar a las instancias web (~5 minutos)
+1. **En EC2-LB**: instala Docker, genera el certificado SSL, consulta AWS para descubrir las IPs privadas de las instancias web del ASG, y arranca Nginx como load balancer con esas IPs en el bloque `upstream`.
 
-Las instancias web del Auto Scaling Group se están auto-configurando en paralelo mediante el script `cloud-init`. Puedes ver el estado en:
+2. **En EC2-DB**: instala Docker y arranca MariaDB con las credenciales que definiste en `terraform.tfvars`.
 
-- **AWS Console → EC2 → Auto Scaling Groups → cloud1-web-asg → Activity**.
-- **AWS Console → EC2 → Target Groups → cloud1-web-tg**: cuando las instancias aparezcan en estado `healthy`, el sitio está listo.
+### Fase 3: Esperaramos a las instancias web
+
+Las instancias web del ASG se están auto-configurando mediante cloud-init. Puedes ver el estado en AWS Console → EC2 → Instances: cuando las instancias de rol `webserver` aparezcan en estado `running`, el sitio está listo.
 
 ### Fase 4: Acceder al sitio
 
@@ -257,19 +282,19 @@ Las instancias web del Auto Scaling Group se están auto-configurando en paralel
 terraform output cloudfront_domain
 ```
 
-Abre esa URL en el navegador. Deberías ver WordPress funcionando con HTTPS.
+Abrimos esa URL en el navegador. Veremos WordPress funcionando con HTTPS.
 
 ---
 
-## 7. Demos para la Defensa
+## 7. Demos de funcionamiento
 
 ### Verificar que hay 2 servidores en paralelo
 
-Abre las herramientas de desarrollo del navegador (F12 → Network) y recarga la página varias veces. Busca la cabecera de respuesta `X-Served-By`: verás que cambia entre diferentes nombres de instancia, demostrando que cada petición va a un servidor distinto.
-
-Alternativamente, desde terminal:
+Abrimos las herramientas de desarrollo del navegador (F12 → Network) y recargamos la página varias veces. 
+Buscamos la cabecera de respuesta `X-Served-By`: veremos que cambia entre diferentes nombres de instancia, demostrando que el Nginx LB está distribuyendo las peticiones.
 
 ```bash
+# Desde terminal, refrescamos 6 veces y ver qué servidor responde:
 for i in $(seq 1 6); do
   curl -sk https://TU_CLOUDFRONT_DOMAIN/ -I | grep X-Served-By
 done
@@ -277,29 +302,29 @@ done
 
 ### Verificar el CDN
 
-En las herramientas de desarrollo (F12 → Network), recarga la página dos veces. En la segunda carga, los ficheros de `/wp-content/` (CSS, imágenes del tema) mostrarán la cabecera:
+En las herramientas de desarrollo (F12 → Network), recargamos la página dos veces. En la segunda carga, los ficheros de `/wp-content/` (CSS, imágenes del tema) mostrarán la cabecera:
 
 ```
 x-cache: Hit from cloudfront
 ```
 
-Esto demuestra que el CDN está cacheando y sirviendo los assets estáticos.
+Esto demuestra que CloudFront está cacheando y sirviendo los assets estáticos.
 
 ### Verificar persistencia de sesión
 
-1. Entra al panel de administración de WordPress: `https://TU_URL/wp-admin`.
-2. Inicia sesión.
-3. Recarga la página varias veces.
-4. Comprueba que sigues logueado aunque el `X-Served-By` cambie entre instancias.
+1. Entra al panel de administración: `https://TU_URL/wp-admin`.
+2. Iniciamos sesión con las credenciales configuradas.
+3. Recargamos la página varias veces.
+4. Comprobamos que seguimos logueados aunque el `X-Served-By` cambie entre instancias.
 
-Esto funciona porque WordPress usa cookies firmadas con las claves de `wp-config.php`. Al ser el mismo fichero de configuración en todas las instancias (compartido via EFS), las cookies son válidas en cualquier servidor.
+Esto funciona porque WordPress usa cookies firmadas con las claves de `wp-config.php`. Al compartir `wp-config.php` vía EFS, las claves son idénticas en todas las instancias y las cookies son válidas en cualquier servidor.
 
 ### Verificar sincronización de imágenes
 
-1. Ve a WordPress Admin → Media → Añadir nueva.
-2. Sube cualquier imagen.
-3. Publica un artículo con esa imagen.
-4. Recarga la página varias veces: la imagen aparece independientemente de qué instancia sirva la petición.
+1. Vamos a WordPress Admin → Media → Añadir nueva.
+2. Subimos cualquier imagen.
+3. Publicamos un artículo con esa imagen.
+4. Recargamos la página varias veces: la imagen aparece independientemente de qué instancia sirva la petición.
 
 Esto funciona gracias al EFS compartido: el directorio `wp-content/uploads/` es el mismo sistema de ficheros para todas las instancias.
 
@@ -308,25 +333,40 @@ Esto funciona gracias al EFS compartido: el directorio `wp-content/uploads/` es 
 ```bash
 cd terraform
 
-# Escalar de 2 a 4 instancias
+# Escalar de 2 a 4 instancias web
 terraform apply -var="web_desired=4"
 ```
 
-Ve a AWS Console → EC2 → Auto Scaling Groups y observa cómo se lanzan nuevas instancias. En pocos minutos el ALB las detecta como `healthy` y empieza a enviarles tráfico. El sitio permanece accesible durante todo el proceso.
+Las nuevas instancias arrancarán con cloud-init y se auto-configurarán. Una vez en estado `running`, actualiza el Nginx LB para que las incluya en el upstream:
+
+```bash
+cd ..
+ansible-playbook -i inventory.ini playbook.yml -l lb
+```
+
+Para demostrar que el tráfico llega a las nuevas instancias, recargamos el sitio y observamos cómo `X-Served-By` ahora muestra 4 hostnames distintos.
 
 Para volver a 2 instancias:
 
 ```bash
+cd terraform
 terraform apply -var="web_desired=2"
+cd ..
+ansible-playbook -i inventory.ini playbook.yml -l lb
 ```
 
-### Demo de alta disponibilidad
+### Demo de alta disponibilidad (HA)
 
-1. Ve a AWS Console → EC2 → Instances.
-2. Selecciona una de las instancias `cloud1-web` y termínala (Actions → Terminate).
-3. Observa que el sitio sigue funcionando: el ALB detecta la instancia caída y deja de enviarle tráfico.
+1. Vamos a AWS Console → EC2 → Instances.
+2. Seleccionamos una de las instancias `cloud1-web` y la terminamos (Actions → Terminate instance).
+3. Observaremos que el sitio sigue funcionando: el Nginx LB detecta que ese backend no responde y deja de enviarle tráfico (failover pasivo).
 4. En AWS Console → Auto Scaling Groups → cloud1-web-asg, verás cómo el ASG lanza automáticamente una nueva instancia para mantener el mínimo de 2.
-5. En unos ~5 minutos, la nueva instancia aparece como `healthy` en el target group.
+5. En unos ~5 minutos, la nueva instancia termina cloud-init y está lista.
+6. Actualizamos el upstream del Nginx LB:
+
+```bash
+ansible-playbook -i inventory.ini playbook.yml -l lb
+```
 
 ---
 
@@ -337,16 +377,14 @@ terraform apply -var="web_desired=2"
 ```bash
 cd terraform
 
-# Ver todos los outputs (URL del sitio, IPs, etc.)
+# Para ver todos los outputs (URL, IPs, etc.)
 terraform output
 
-# Ver el estado completo de los recursos
+# Para ver el estado completo de recursos
 terraform show
 ```
 
 ### Reiniciar los contenedores en el servidor de base de datos
-
-Si necesitas reiniciar MariaDB:
 
 ```bash
 ssh -i ~/.ssh/cloud-1-key.pem ubuntu@$(terraform output -raw db_public_ip)
@@ -354,19 +392,31 @@ cd /home/ubuntu/db
 docker compose restart
 ```
 
-### Ver logs de cloud-init en instancias web
-
-Para diagnosticar problemas en las instancias web del ASG, conéctate a una de ellas:
+### Conectarse al Nginx LB
 
 ```bash
-# Obtén la IP de una instancia web desde AWS Console
+ssh -i ~/.ssh/cloud-1-key.pem ubuntu@$(terraform output -raw lb_public_ip)
+
+# Vemos la configuración de nginx generada por Ansible:
+cat /home/ubuntu/lb/nginx.conf
+
+# Vemos los logs del LB:
+docker logs nginx-lb
+```
+
+### Ver logs de cloud-init en instancias web
+
+Para diagnosticar problemas en instancias del ASG:
+
+```bash
+# Obtenemos la IP de una instancia web desde AWS Console → EC2 → Instances
 ssh -i ~/.ssh/cloud-1-key.pem ubuntu@IP_INSTANCIA_WEB
 cat /var/log/cloud-init-wordpress.log
 ```
 
-### Reset del entorno de base de datos (para demos)
+### Reset del entorno para demos
 
-Si quieres reiniciar solo el servidor de base de datos (borrar todo y volver a desplegar MariaDB desde cero):
+Si queremos dejar el LB y la DB completamente limpios para volver a desplegar desde cero:
 
 ```bash
 cd 42_Cloud-1/
@@ -379,24 +429,25 @@ ansible-playbook -i inventory.ini playbook.yml
 
 ## 9. Destrucción Completa de la Infraestructura
 
-Cuando termines con el proyecto (después de la defensa, por ejemplo), es **muy importante** destruir todos los recursos para no incurrir en costes:
+Cuando terminemos con el proyecto, **es muy importante** destruir todos los recursos para no incurrir en costes:
 
 ```bash
 cd 42_Cloud-1/terraform
 terraform destroy
 ```
 
-Terraform te pedirá confirmación con `yes`. A continuación eliminará **absolutamente todo** lo que creó:
+Terraform pedirá confirmación con `yes`. Eliminará absolutamente todo:
 
-- Las instancias EC2 (base de datos y todas las web del ASG).
-- El ALB y el Auto Scaling Group.
+- Las instancias EC2 (LB, DB y todas las web del ASG).
+- El Auto Scaling Group y el Launch Template.
 - La distribución de CloudFront.
 - El bucket S3 y su contenido.
 - El sistema de ficheros EFS y todos los datos de WordPress.
-- Los Security Groups y roles IAM.
+- La Elastic IP.
+- Los Security Groups e IAM roles.
 - El `inventory.ini` local.
 
-> **Atención**: `terraform destroy` borra los datos de WordPress de forma permanente (imágenes, artículos, usuarios). Esto es correcto y esperado en un entorno de práctica. Para entornos reales habría que hacer snapshots del EFS antes.
+> **Atención**: `terraform destroy` borra los datos de WordPress de forma permanente. Esto es correcto para un entorno de práctica.
 
 ---
 
@@ -406,42 +457,46 @@ Terraform te pedirá confirmación con `yes`. A continuación eliminará **absol
 42_Cloud-1/
 │
 ├── terraform/                    # Infraestructura AWS como código
-│   ├── main.tf                   # Provider AWS, data sources
-│   ├── variables.tf              # Variables configurables
-│   ├── outputs.tf                # Valores de salida (URL, IPs...)
-│   ├── security_groups.tf        # Reglas de firewall (SGs)
-│   ├── iam.tf                    # Permisos de instancias web → S3
-│   ├── s3.tf                     # Bucket de configuración
-│   ├── s3_objects.tf             # Sube docker-compose, nginx.conf, .env
+│   ├── main.tf                   # Provider AWS (eu-west-3), data sources
+│   ├── variables.tf              # Variables: web_desired, instance_type, credentials...
+│   ├── outputs.tf                # Salidas: URL, IPs, ASG name...
+│   ├── security_groups.tf        # SG-LB, SG-Web, SG-DB, SG-EFS
+│   ├── iam.tf                    # IAM role para que instancias web lean S3
+│   ├── ec2_lb.tf                 # EC2 Nginx LB + Elastic IP + DuckDNS update
+│   ├── ec2_db.tf                 # EC2 MariaDB
+│   ├── s3.tf + s3_objects.tf     # Bucket + configuración renderizada para cloud-init
 │   ├── efs.tf                    # Sistema de ficheros compartido
-│   ├── ec2_db.tf                 # Instancia EC2 de base de datos
-│   ├── alb.tf                    # Application Load Balancer
-│   ├── asg.tf                    # Auto Scaling Group + CloudWatch alarms
-│   ├── cloudfront.tf             # CDN
+│   ├── asg.tf                    # Launch Template + Auto Scaling Group + CloudWatch
+│   ├── cloudfront.tf             # CDN (origin = Elastic IP del LB)
 │   ├── inventory.tf              # Genera inventory.ini para Ansible
 │   ├── user_data.sh.tpl          # Script cloud-init de las instancias web
 │   ├── docker-compose.web.yml.tpl # Docker Compose para instancias web
-│   ├── nginx.web.conf.tpl        # Configuración Nginx de instancias web
+│   ├── nginx.web.conf.tpl        # Nginx de instancias web (port 80, X-Served-By)
 │   ├── env_web.tpl               # Template del fichero .env
 │   ├── inventory.tpl             # Template de inventory.ini
-│   └── terraform.tfvars.example  # Ejemplo de variables (copiar a .tfvars)
+│   └── terraform.tfvars.example  # Variables de ejemplo (copiar a .tfvars)
 │
 ├── roles/
-│   ├── docker/                   # Instala Docker en el servidor de BD
+│   ├── docker/                   # Instala Docker en cualquier EC2 Ubuntu
+│   ├── loadbalancer/             # Configura Nginx LB en EC2-LB
+│   │   ├── tasks/main.yml        # Descubre IPs del ASG, genera config, arranca Nginx
+│   │   └── templates/
+│   │       ├── nginx.lb.conf.j2  # Upstream dinámico con IPs de instancias web
+│   │       └── docker-compose.lb.yml.j2
 │   └── database/                 # Despliega MariaDB en EC2-DB
 │       ├── tasks/main.yml
-│       ├── templates/
-│       │   ├── docker-compose.db.yml.j2
-│       │   └── .env.db.j2        # Credenciales desde inventory → BD
+│       └── templates/
+│           ├── docker-compose.db.yml.j2
+│           └── .env.db.j2        # Credenciales desde inventory.ini
 │
 ├── group_vars/
 │   └── all.yml                   # Variables compartidas de Ansible
 │
-├── playbook.yml                  # Despliega el rol database en EC2-DB
-├── reset.yml                     # Reinicia el entorno de base de datos
+├── playbook.yml                  # Configura LB (rol loadbalancer) y DB (rol database)
+├── reset.yml                     # Reinicia LB y DB (para demos)
 ├── ansible.cfg                   # Configuración de Ansible
 ├── inventory.ini                 # AUTO-GENERADO por terraform apply
-└── .gitignore                    # Protege secrets y ficheros generados
+└── .gitignore                    # Protege terraform.tfvars, inventory.ini, .pem, etc.
 ```
 
 ---
@@ -450,36 +505,38 @@ Terraform te pedirá confirmación con `yes`. A continuación eliminará **absol
 
 ### 1. Gestión de Costes
 
-Los recursos que tienen coste (fuera del Free Tier) son:
+Con la arquitectura actual (EC2 Nginx LB en lugar de ALB), el proyecto entra completamente en el **Free Tier de AWS** para sesiones cortas de evaluación:
 
-- **ALB**: ~$0.016/hora (~$0.40/día). Necesario para el Auto Scaling Group.
-- **EC2 t3.micro**: El Free Tier cubre 750 horas/mes en total para todas las instancias. Con 3 instancias corriendo 24h serían ~72h/día, lo que supera el límite si se deja encendido todo el mes.
+- **4 instancias t3.micro** × 8h de evaluación = 32h → dentro del límite de 750h/mes ✓
+- **EFS**: 5 GB de free tier, más que suficiente ✓
+- **CloudFront**: 1 TB de transferencia y 10 millones de peticiones/mes ✓
+- **S3**: 5 GB y 20.000 peticiones GET/mes ✓
 
-**Regla de oro**: Solo encender la infraestructura cuando vayas a trabajar o a hacer la defensa. Destruir siempre al terminar con `terraform destroy`.
+**IMPORTANTÍSIMO**: destruiremos siempre con `terraform destroy` al terminar.
 
 ### 2. Seguridad por capas
 
-El proyecto implementa seguridad en múltiples niveles:
-
-- **Security Groups**: El puerto 3306 (MariaDB) solo es accesible desde las instancias web, no desde internet. El puerto 2049 (EFS/NFS) solo es accesible desde las instancias web. El SSH (22) solo es accesible desde tu IP.
-- **IAM roles**: Las instancias web solo pueden leer del bucket S3 de configuración. No tienen permisos para modificar nada más.
-- **Red privada**: La comunicación entre las instancias web y la base de datos se hace por la red privada de AWS usando IPs privadas.
+- **Security Groups**: puerto 3306 (MariaDB) solo accesible desde instancias web. Puerto 2049 (EFS) solo desde instancias web. SSH solo desde tu IP pública.
+- **IAM roles**: instancias web solo pueden leer del bucket S3 de configuración.
+- **Red privada AWS**: LB → Web y Web → DB usan IPs privadas (nunca pasan por internet).
+- **Nginx LB**: solo expone 80 y 443 al mundo exterior.
 
 ### 3. Persistencia y alta disponibilidad
 
-- Los datos de WordPress (imágenes, ficheros) viven en el EFS, que es un sistema de ficheros distribuido y resistente a fallos de zona de disponibilidad.
-- Los datos de MariaDB viven en el volumen EBS de EC2-DB. Si EC2-DB se reinicia, los datos persisten. Si EC2-DB se termina, los datos se pierden (para producción real habría que usar RDS con Multi-AZ o hacer snapshots).
-- Los contenedores Docker están configurados con `restart: always`, por lo que se reinician automáticamente si crashean o si la instancia se reinicia.
+- **WordPress files** (imágenes, themes, plugins): viven en EFS → persistentes aunque fallen todas las instancias web.
+- **Base de datos**: vive en el EBS de EC2-DB → persiste ante reinicios del servidor. Si la instancia se termina, los datos persisten en el volumen EBS que se puede reasignar.
+- **Contenedores**: configurados con `restart: always` → se reinician automáticamente si crashean.
+- **EC2 web**: ASG las reemplaza si fallan a nivel de hardware o son terminadas.
 
 ### 4. Secrets y seguridad del código
 
-- Las contraseñas viajan de `terraform.tfvars` (en tu máquina local, nunca en git) → a S3 (fichero `.env` privado) → a las instancias web en tiempo de arranque.
-- El estado de Terraform (`terraform.tfstate`) contiene las contraseñas en texto plano y está en `.gitignore`. Para producción se usaría un backend remoto de Terraform (S3 + DynamoDB con cifrado).
-- Nunca subas `terraform.tfvars`, `inventory.ini`, `.pem` ni `terraform.tfstate` a git.
+- Las contraseñas viajan de `terraform.tfvars` (local, nunca en git) → a S3 (privado, solo web instances pueden leer) → a las instancias en tiempo de arranque.
+- El estado de Terraform (`terraform.tfstate`) contiene datos sensibles → está en `.gitignore`.
+- `inventory.ini` contiene IPs y credenciales → está en `.gitignore` y se regenera automáticamente.
 
 ### 5. El usuario root
 
-Para la defensa, el evaluador pedirá conectarse como root al servidor. En Ubuntu 22.04 el usuario por defecto es `ubuntu`. Para demostrar el acceso como root:
+Para conectarse como root:
 
 ```bash
 ssh -i ~/.ssh/cloud-1-key.pem ubuntu@IP_SERVIDOR
