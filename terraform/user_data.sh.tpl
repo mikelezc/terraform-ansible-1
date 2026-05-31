@@ -87,7 +87,7 @@ docker-compose up -d
 echo "=== [cloud-init] Waiting for WordPress wp-config.php ==="
 for i in $(seq 1 24); do
   if [ -f /home/ubuntu/data/wordpress/wp-config.php ]; then
-    echo "wp-config.php found after ${i}×5s"
+    echo "wp-config.php found after $${i}x5s"
     break
   fi
   sleep 5

@@ -1,27 +1,28 @@
 # Cloud-1: Infraestructura Multi-Servidor en AWS
 
-Este documento es la guía completa de la arquitectura y el despliegue del proyecto Cloud-1 de 42. 
-Multi-servidor, con balanceo de carga Nginx, alta disponibilidad, CDN y automatización total mediante Terraform y Ansible.
+Este documento es la guía completa de la arquitectura y el despliegue del proyecto. 
 
 ---
 
 ## 1. Conceptos Fundamentales del Proyecto
 
-La infraestructura se distribuye entre varias máquinas especializadas, y todo se aprovisiona mediante **dos capas de automatización**:
+La infraestructura se distribuye entre varias máquinas EC2 de AWS, y todo se aprovisiona mediante **dos capas de automatización**:
 
 ### Infraestructura como Código (IaC) con Terraform
 
 Terraform nos permite describir en código HCL (HashiCorp Configuration Language) qué recursos de AWS queremos crear y desplegar.
 
-Además, gestiona el **estado** de la infraestructura. Si ejecutamos `terraform apply` dos veces, solo aplicará los cambios que no existían todavía (idempotencia).
+Además, gestiona los cambios que queramos hacer sobre de la infraestructura: 
 
-Si ejecutamos `terraform destroy`, se eliminará absolutamente todo lo que se creó, dejando la cuenta de AWS limpia y sin costes.
+Si ejecutamos `terraform apply` dos veces, solo aplicará los cambios que no existían todavía (idempotencia).
+
+Si ejecutamos `terraform destroy`, se eliminará absolutamente todo lo que se creó, dejando la cuenta de AWS limpia de todo lo que hemos creado.
 
 ### Configuración de Servidores con Ansible
 
 Ansible configura el **load balancer** (EC2-LB) y el **servidor de base de datos** (EC2-DB). 
 
-Las instancias web se auto-configuran solas al arrancar mediante un script de `cloud-init` (más sobre esto en la sección de arquitectura).
+Las instancias web se auto-configuran solas al arrancar mediante un script de `cloud-init` (explicaremos más sobre esto en la sección de arquitectura).
 
 **1 contenedor = 1 proceso**. Los servicios que corren son:
 
@@ -95,7 +96,7 @@ Las instancias web se auto-configuran solas al arrancar mediante un script de `c
   └─────────────────────────────────────────────┘
 ```
 
-### Por qué cada pieza existe
+### Desglose de componentes
 
 | Componente | Por qué lo necesitamos |
 |---|---|
@@ -105,14 +106,6 @@ Las instancias web se auto-configuran solas al arrancar mediante un script de `c
 | **EC2-DB separado** | La base de datos esté en una máquina distinta a las web. |
 | **EFS** | Sistema de ficheros de red compartido. Cuando subes una imagen en la instancia web-1, también aparece en web-2. Sin esto, cada servidor tendría su propio disco y las imágenes no sincronizarían. |
 | **S3** | Las instancias del Auto Scaling Group se lanzan automáticamente. Necesitan descargar su configuración de algún sitio al arrancar. S3 es el repositorio centralizado de configuración. |
-
-### Por qué usamos Nginx como LB en lugar de AWS ALB
-
-El proyecto Inception original del que pàrtimos ya usaba Nginx como load balancer y punto de entrada. 
-Usar un EC2 con Nginx como load balancer es:
-- **Más barato**: el ALB de AWS no tiene free tier; un t3.micro adicional sí entra en free tier.
-- **Más explicable como proyecto pedagógico**: podemos ver el fichero `nginx.conf` con el bloque `upstream` y entender exactamente cómo funciona el balanceo.
-- **Trade-off**: cuando el ASG crea una nueva instancia (por escalado o HA), hay que re-ejecutar Ansible en el LB para que Nginx aprenda la nueva IP (`ansible-playbook -i inventory.ini playbook.yml -l lb`).
 
 ---
 
@@ -138,26 +131,42 @@ Antes de ejecutar cualquier cosa, necesitamos configurar lo siguiente en la máq
 ### Herramientas
 
 ```bash
-# macOS (homebrew):
-brew install terraform ansible awscli
+# macOS — Terraform requiere el tap oficial de HashiCorp (no está en Homebrew core):
+brew tap hashicorp/tap
+brew install hashicorp/tap/terraform
+
+# macOS — Ansible y AWS CLI sí están en Homebrew core:
+brew install ansible awscli
 
 # Ubuntu:
 sudo apt update && sudo apt install -y ansible awscli
-# Terraform: https://developer.hashicorp.com/terraform/install
+# Terraform en Ubuntu: https://developer.hashicorp.com/terraform/install
+
+# Verificar que todo está instalado:
+terraform version
+ansible --version
+aws --version
 ```
 
 ### Cuenta y credenciales AWS
 
-1. Tener una cuenta de AWS con acceso a la región `eu-west-3` (París).
-2. Configurar el CLI de AWS con tus credenciales:
+1. Inicia sesión en [console.aws.amazon.com](https://console.aws.amazon.com).
+2. Haz clic en tu nombre de usuario (arriba a la derecha) → **Security credentials**.
+3. Baja hasta la sección **Access keys** → **Create access key**.
+4. Elige el caso de uso **Command Line Interface (CLI)** → Next → Create.
+5. Copia el **Access Key ID** y el **Secret Access Key** — el secret solo se muestra una vez, descarga el `.csv` si no quieres apuntarlo a mano.
+
+Con esos datos, configura el CLI de AWS:
 
 ```bash
 aws configure
-# AWS Access Key ID: [tu access key]
-# AWS Secret Access Key: [tu secret key]
-# Default region name: eu-west-3
+# AWS Access Key ID:     AKIAIOSFODNN7EXAMPLE
+# AWS Secret Access Key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+# Default region name:   eu-west-3
 # Default output format: json
 ```
+
+Esto guarda las credenciales en `~/.aws/credentials`. Terraform las usará automáticamente desde ahí.
 
 ### Key pair de AWS
 
@@ -178,7 +187,7 @@ chmod 400 ~/.ssh/cloud-1-key.pem
 
 ## 5. Configuración Inicial
 
-### Paso 1: Configurar variables secretas
+### Paso 1: Configuración de las variables secretas
 
 Entramos en la carpeta `terraform/` y copia el fichero de ejemplo:
 
