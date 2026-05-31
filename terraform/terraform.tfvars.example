@@ -1,0 +1,26 @@
+# Copy this file to terraform.tfvars and fill in your values
+# NEVER commit terraform.tfvars to git — it contains secrets
+
+# Your public IP for SSH access (find it with: curl ifconfig.me)
+my_ip = "YOUR_PUBLIC_IP/32"
+
+# Name of the AWS key pair in eu-west-3 (must already exist in AWS)
+key_name = "cloud-1-key"
+
+# Local path to the private key file for Ansible SSH
+ssh_private_key_path = "~/.ssh/cloud-1-key.pem"
+
+# Database credentials — change these!
+db_password      = "choose_a_strong_password"
+db_root_password = "choose_a_strong_root_password"
+
+# Optional: DuckDNS (leave empty to skip DNS update)
+# duckdns_token     = "your-duckdns-token"
+# duckdns_subdomain = "mlezcano-cloud1"
+
+# Optional overrides (defaults are fine for evaluation)
+# aws_region    = "eu-west-3"
+# instance_type = "t3.micro"
+# web_desired   = 2
+# web_min_size  = 2
+# web_max_size  = 4

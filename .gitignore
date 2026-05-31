@@ -1,0 +1,18 @@
+# Terraform secrets and state — NEVER commit these
+terraform/terraform.tfvars
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/*.tfplan
+
+# Ansible secrets
+roles/database/files/.env.db.local
+*.pem
+*.key
+
+# Auto-generated files (recreated by terraform apply)
+inventory.ini
+
+# OS
+.DS_Store

@@ -1,27 +1,33 @@
 ---
-- name: Reset AWS EC2 Environment for Cloud-1 Demo
-  hosts: cloud_1_servers
+# Reset playbook — destroys the deployed environment on the DB server
+# Web instances are ephemeral (ASG) — terminate them via AWS Console or:
+#   aws autoscaling set-desired-capacity --auto-scaling-group-name cloud1-web-asg --desired-capacity 0
+#
+# Full infrastructure teardown: cd terraform && terraform destroy
+
+- name: Reset database server environment
+  hosts: db
   become: yes
   vars:
-    deploy_user: "{{ ansible_user | default('ec2-user') }}"
+    deploy_user: ubuntu
 
   tasks:
-    - name: Stop and remove Docker compose stack
-      command: docker compose -f /home/{{ deploy_user }}/inception/docker-compose.yml down -v
+    - name: Stop and remove MariaDB Docker compose stack (including volumes)
+      command: docker compose -f /home/{{ deploy_user }}/db/docker-compose.yml down -v
       args:
-        chdir: "/home/{{ deploy_user }}/inception"
+        chdir: /home/{{ deploy_user }}/db
       ignore_errors: true
 
     - name: Prune all Docker containers, images, and volumes
       command: docker system prune -a --volumes -f
       ignore_errors: true
 
-    - name: Remove Cloud-1 deployment directory
+    - name: Remove database deployment directory
       file:
-        path: "/home/{{ deploy_user }}/inception"
+        path: /home/{{ deploy_user }}/db
         state: absent
 
-    - name: Remove persistent data directory
+    - name: Remove MariaDB data directory
       file:
-        path: "/home/{{ deploy_user }}/data"
+        path: /home/{{ deploy_user }}/data
         state: absent
