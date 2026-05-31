@@ -289,9 +289,15 @@ Las instancias web del ASG se están auto-configurando mediante cloud-init. Pued
 ### Fase 4: Acceder al sitio
 
 ```bash
-# La URL de tu sitio:
+# Ver todos los outputs (URL, IPs, nombre del ASG...):
+cd terraform
+terraform output
+
+# O solo la URL del sitio:
 terraform output cloudfront_domain
 ```
+
+`terraform output <nombre>` muestra el valor del output definido en `outputs.tf` con ese nombre. Debe ejecutarse desde la carpeta `terraform/` donde está el estado de Terraform.
 
 Abrimos esa URL en el navegador. Veremos WordPress funcionando con HTTPS.
 
