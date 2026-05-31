@@ -19,6 +19,10 @@ resource "aws_launch_template" "web" {
     s3_bucket         = aws_s3_bucket.config.id
     cloudfront_domain = aws_cloudfront_distribution.wordpress.domain_name
     aws_region        = var.aws_region
+    wp_title          = var.wp_title
+    wp_admin_user     = var.wp_admin_user
+    wp_admin_password = var.wp_admin_password
+    wp_admin_email    = var.wp_admin_email
   }))
 
   block_device_mappings {

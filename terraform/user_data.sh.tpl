@@ -115,4 +115,32 @@ else
   echo "WARNING: wp-config.php not found — WordPress may not have initialized yet"
 fi
 
+# ─── Auto-install WordPress via WP-CLI ────────────────────────────────────────
+# Install WP-CLI inside the running WordPress container (same approach as Inception)
+echo "=== [cloud-init] Installing WP-CLI ==="
+docker exec -u root wordpress bash -c "
+  if [ ! -f /usr/local/bin/wp ]; then
+    curl -sS -o /usr/local/bin/wp https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+    chmod +x /usr/local/bin/wp
+    echo 'WP-CLI installed'
+  else
+    echo 'WP-CLI already present'
+  fi
+"
+
+echo "=== [cloud-init] Auto-installing WordPress ==="
+if ! docker exec -u root wordpress wp core is-installed --allow-root 2>/dev/null; then
+  docker exec -u root wordpress wp core install \
+    --url="https://${cloudfront_domain}" \
+    --title="${wp_title}" \
+    --admin_user="${wp_admin_user}" \
+    --admin_password="${wp_admin_password}" \
+    --admin_email="${wp_admin_email}" \
+    --skip-email \
+    --allow-root
+  echo "WordPress installed successfully"
+else
+  echo "WordPress already installed — skipping"
+fi
+
 echo "=== [cloud-init] Web instance setup complete ==="

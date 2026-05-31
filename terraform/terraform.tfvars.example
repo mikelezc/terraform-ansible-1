@@ -14,6 +14,12 @@ ssh_private_key_path = "~/.ssh/cloud-1-key.pem"
 db_password      = "choose_a_strong_password"
 db_root_password = "choose_a_strong_root_password"
 
+# WordPress admin account (auto-installed on first boot via WP-CLI)
+wp_admin_password = "choose_a_strong_wp_password"
+# wp_admin_user  = "admin"           # default: admin
+# wp_admin_email = "admin@example.com"
+# wp_title       = "Cloud-1"
+
 # Optional: DuckDNS (leave empty to skip DNS update)
 # duckdns_token     = "your-duckdns-token"
 # duckdns_subdomain = "mlezcano-cloud1"

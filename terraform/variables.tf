@@ -91,3 +91,28 @@ variable "project_name" {
   type        = string
   default     = "cloud1"
 }
+
+# WordPress auto-install credentials (used by WP-CLI in cloud-init)
+variable "wp_title" {
+  description = "WordPress site title"
+  type        = string
+  default     = "Cloud-1"
+}
+
+variable "wp_admin_user" {
+  description = "WordPress admin username"
+  type        = string
+  default     = "admin"
+}
+
+variable "wp_admin_password" {
+  description = "WordPress admin password"
+  type        = string
+  sensitive   = true
+}
+
+variable "wp_admin_email" {
+  description = "WordPress admin email"
+  type        = string
+  default     = "admin@example.com"
+}

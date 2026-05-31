@@ -206,16 +206,27 @@ my_ip = "1.2.3.4/32"
 # Nombre del key pair que creamos en AWS eu-west-3
 key_name = "cloud-1-key"
 
-# Contraseñas de la base de datos (las cambiaremos)
+# Contraseñas de la base de datos
 db_password      = "mi_password_seguro"
 db_root_password = "mi_root_password_seguro"
+
+# Credenciales del admin de WordPress (se instala automáticamente con WP-CLI al arrancar)
+wp_admin_password = "mi_password_wp_seguro"
+# wp_admin_user  = "admin"                 # usuario admin (por defecto: admin)
+# wp_admin_email = "admin@example.com"     # email del admin
+# wp_title       = "Cloud-1"              # título del sitio
 
 # Opcional: DuckDNS (si queremos un dominio concreto)
 # duckdns_token     = "tu-token-de-duckdns"
 # duckdns_subdomain = "mlezcano-cloud1"
 ```
 
-> **IMPORATNTE: Nunca subiremos `terraform.tfvars` a git.** Está incluido en el `.gitignore`. Contiene las contraseñas vulnerables.
+> **Nunca subas `terraform.tfvars` a git.** Está en el `.gitignore`. Contiene todas las contraseñas.
+
+Las variables de WordPress funcionan así:
+- `wp_admin_password` es obligatoria (no tiene valor por defecto).
+- `wp_admin_user`, `wp_admin_email` y `wp_title` tienen valores por defecto y son opcionales.
+- Al arrancar cada instancia web, `cloud-init` instala WP-CLI dentro del contenedor de WordPress y ejecuta `wp core install` con estas credenciales. Si WordPress ya está instalado en el EFS (porque otra instancia lo instaló antes), se salta la instalación.
 
 ### Paso 2 (Opcional): DuckDNS
 
@@ -429,6 +440,24 @@ Para diagnosticar problemas en instancias del ASG:
 # Obtenemos la IP de una instancia web desde AWS Console → EC2 → Instances
 ssh -i ~/.ssh/cloud-1-key.pem ubuntu@IP_INSTANCIA_WEB
 cat /var/log/cloud-init-wordpress.log
+```
+
+### Aplicar cambios de configuración a instancias ya desplegadas
+
+El `cloud-init` solo se ejecuta una vez al crear la instancia. Si modificas variables de WordPress o el script de arranque en `terraform.tfvars` o `user_data.sh.tpl`, las instancias web existentes no se actualizarán solas. Para aplicar los cambios:
+
+```bash
+# 1. Actualizar el Launch Template con el nuevo user_data
+cd terraform
+terraform apply
+
+# 2. Terminar las instancias web actuales desde AWS Console:
+#    EC2 → Instances → seleccionar instancias "cloud1-web" → Terminate instance
+#    El ASG las reemplaza automáticamente con el nuevo script de arranque
+
+# 3. Actualizar el certificado del LB (si cambiaste los campos del cert):
+cd ..
+ansible-playbook -i inventory.ini playbook.yml -l lb
 ```
 
 ### Reset del entorno para demos

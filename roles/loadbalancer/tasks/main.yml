@@ -27,6 +27,11 @@
   openssl_csr:
     path: /home/ubuntu/lb/ssl/server.csr
     privatekey_path: /home/ubuntu/lb/ssl/server.key
+    country_name: "ES"
+    state_or_province_name: "Madrid"
+    locality_name: "Madrid"
+    organization_name: "42 Madrid"
+    organizational_unit_name: "Cloud-1"
     common_name: "{{ cloudfront_domain }}"
 
 - name: Generate self-signed certificate
