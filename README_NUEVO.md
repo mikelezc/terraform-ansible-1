@@ -258,6 +258,8 @@ db_public_ip      = "35.180.xx.xx"
 
 La URL de CloudFront es la dirección del sitio.
 
+> **`inventory.ini` se genera automáticamente**: Terraform escribe este fichero al terminar con las IPs reales del LB, la DB y las variables necesarias para Ansible. No hay que tocarlo a mano.
+
 ### Fase 2: Configurar LB y Base de Datos con Ansible
 
 ```bash
