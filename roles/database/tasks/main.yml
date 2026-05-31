@@ -34,7 +34,6 @@
     mode: '0644'
 
 - name: Start MariaDB container
-  become_user: ubuntu
   command: docker compose -f /home/ubuntu/db/docker-compose.yml up -d
   args:
     chdir: /home/ubuntu/db

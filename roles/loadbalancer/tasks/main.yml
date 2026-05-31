@@ -95,7 +95,6 @@
     mode: '0644'
 
 - name: Start (or restart) Nginx LB stack
-  become_user: ubuntu
   command: docker compose -f /home/ubuntu/lb/docker-compose.yml up -d --force-recreate
   args:
     chdir: /home/ubuntu/lb
