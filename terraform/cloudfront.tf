@@ -3,9 +3,11 @@ resource "aws_cloudfront_distribution" "wordpress" {
   enabled     = true
   price_class = "PriceClass_100" # North America + Europe only (cheapest)
 
-  # Origin: Nginx LB EC2 via Elastic IP (HTTP only — CloudFront terminates HTTPS)
+  # Origin: Nginx LB EC2 via its AWS public DNS hostname.
+  # CloudFront does not accept raw IP addresses as origins — must be a hostname.
+  # AWS assigns ec2-W-X-Y-Z.<region>.compute.amazonaws.com to every Elastic IP.
   origin {
-    domain_name = aws_eip.lb.public_ip
+    domain_name = "ec2-${replace(aws_eip.lb.public_ip, ".", "-")}.${var.aws_region}.compute.amazonaws.com"
     origin_id   = "${var.project_name}-lb-origin"
 
     custom_origin_config {
