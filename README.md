@@ -257,6 +257,15 @@ terraform plan
 terraform apply
 ```
 
+> **Aviso de `terraform plan`**: al terminar muestra el mensaje *"You didn't use the -out option to save this plan..."*. Es informativo, no un error. Significa que si algo cambiase en AWS entre el `plan` y el `apply`, Terraform actuaría sobre el estado real en ese momento, no sobre la foto del plan. Para este proyecto se puede ignorar. Si quisieras garantía total, guardarías el plan así:
+> ```bash
+> terraform plan -out=tfplan   # guarda el plan en un archivo
+> terraform apply tfplan       # aplica exactamente ese plan
+> ```
+
+```bash
+```
+
 Terraform creará, en orden aproximado:
 
 1. Security Groups e IAM roles.
@@ -267,6 +276,7 @@ Terraform creará, en orden aproximado:
 6. CloudFront (esto tarda ~15 minutos — es normal).
 7. Auto Scaling Group con las instancias web.
 8. Genera el fichero `inventory.ini` para Ansible.
+9. **Lanza Ansible automáticamente** — espera SSH en LB y DB, espera que el ASG tenga instancias activas y ejecuta el playbook sin intervención manual.
 
 Al finalizar, veremos los outputs:
 
@@ -280,22 +290,29 @@ La URL de CloudFront es la dirección del sitio.
 
 > **`inventory.ini` se genera automáticamente**: Terraform escribe este fichero al terminar con las IPs reales del LB, la DB y las variables necesarias para Ansible. No hay que tocarlo a mano.
 
-### Fase 2: Configurar LB y Base de Datos con Ansible
+### Fase 2: Esperar a las instancias web (~5 minutos)
+
+Mientras Terraform lanzaba Ansible en el paso anterior, el Auto Scaling Group arrancaba las instancias web en paralelo. Éstas se auto-configuran mediante `cloud-init` (instalan Docker, montan EFS, descargan config de S3 y arrancan WordPress). Puedes ver el progreso en AWS Console → EC2 → Instances.
+
+> **Ansible ya se ejecutó solo**: no hace falta correr `ansible-playbook` manualmente en un despliegue inicial. El paso siguiente existe como referencia para casos específicos.
+
+### Ejecutar Ansible manualmente (solo cuando sea necesario)
+
+Terraform llama a Ansible automáticamente en el despliegue inicial. Solo necesitas ejecutarlo a mano en estos casos:
 
 ```bash
-cd ..  # Vuelve a 42_Cloud-1/
+# Tras escalar el número de instancias web (actualizar upstream de Nginx):
+ansible-playbook -i inventory.ini playbook.yml -l lb
+
+# Si quieres re-configurar LB y DB sin destruir la infraestructura:
 ansible-playbook -i inventory.ini playbook.yml
 ```
 
-Ansible hará dos cosas en paralelo:
+Ansible hace dos cosas:
 
 1. **En EC2-LB**: instala Docker, genera el certificado SSL, consulta AWS para descubrir las IPs privadas de las instancias web del ASG, y arranca Nginx como load balancer con esas IPs en el bloque `upstream`.
 
 2. **En EC2-DB**: instala Docker y arranca MariaDB con las credenciales que definiste en `terraform.tfvars`.
-
-### Fase 3: Esperaramos a las instancias web
-
-Las instancias web del ASG se están auto-configurando mediante cloud-init. Puedes ver el estado en AWS Console → EC2 → Instances: cuando las instancias de rol `webserver` aparezcan en estado `running`, el sitio está listo.
 
 ### Fase 4: Acceder al sitio
 
