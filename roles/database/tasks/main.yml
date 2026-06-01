@@ -1,0 +1,47 @@
+---
+# Deploy MariaDB on EC2-DB — standalone, no web services here
+
+- name: Create MariaDB data directory
+  file:
+    path: /home/ubuntu/data/mariadb
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Create database deployment directory
+  file:
+    path: /home/ubuntu/db
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Template .env file with database credentials from inventory
+  template:
+    src: .env.db.j2
+    dest: /home/ubuntu/db/.env
+    owner: ubuntu
+    group: ubuntu
+    mode: '0600'
+
+- name: Template Docker Compose for database
+  template:
+    src: docker-compose.db.yml.j2
+    dest: /home/ubuntu/db/docker-compose.yml
+    owner: ubuntu
+    group: ubuntu
+    mode: '0644'
+
+- name: Start MariaDB container
+  command: docker compose -f /home/ubuntu/db/docker-compose.yml up -d
+  args:
+    chdir: /home/ubuntu/db
+
+- name: Wait for MariaDB to be ready (accepts connections)
+  wait_for:
+    host: localhost
+    port: 3306
+    delay: 10
+    timeout: 60
+  ignore_errors: true

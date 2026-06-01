@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:10.6
+    container_name: mariadb
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - /home/ubuntu/data/mariadb:/var/lib/mysql
+    ports:
+      # Exposed to host — web instances connect via private IP
+      # Access is restricted by Security Group (only SG-Web can reach port 3306)
+      - "3306:3306"
+
+networks:
+  default:
+    driver: bridge
