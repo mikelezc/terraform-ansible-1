@@ -8,12 +8,12 @@ terraform/*.tfplan
 terraform/.terraform.tfstate.lock.info
 
 # Ansible secrets
-roles/database/files/.env.db.local
+ansible/roles/database/files/.env.db.local
 *.pem
 *.key
 
 # Auto-generated files (recreated by terraform apply)
-inventory.ini
+ansible/inventory.ini
 
 # OS
 .DS_Store

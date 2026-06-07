@@ -64,7 +64,7 @@ resource "null_resource" "ansible_provision" {
       echo "  ASG instances InService"
 
       echo "=== [Ansible] Running playbook ==="
-      cd ${path.module}/..
+      cd ${path.module}/../ansible
       ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i inventory.ini playbook.yml
 
       echo "=== [Ansible] Done. Site available at: https://${aws_cloudfront_distribution.wordpress.domain_name} ==="
