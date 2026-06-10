@@ -17,6 +17,7 @@ resource "aws_iam_role" "web_instance" {
   }
 }
 
+# IAM policy to allow web instances to read config from S3
 resource "aws_iam_role_policy" "web_s3_read" {
   name = "${var.project_name}-web-s3-read"
   role = aws_iam_role.web_instance.id
@@ -34,6 +35,7 @@ resource "aws_iam_role_policy" "web_s3_read" {
   })
 }
 
+# IAM instance profile for web instances to attach the role
 resource "aws_iam_instance_profile" "web" {
   name = "${var.project_name}-web-instance-profile"
   role = aws_iam_role.web_instance.name

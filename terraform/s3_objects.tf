@@ -1,4 +1,5 @@
 # Render docker-compose for web instances and upload to S3
+# We use an S3 bucket as a simple way to share configuration files with the web instances (via IAM role).
 resource "aws_s3_object" "docker_compose_web" {
   bucket = aws_s3_bucket.config.id
   key    = "docker-compose.web.yml"

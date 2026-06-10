@@ -1,5 +1,6 @@
 # ─── Load Balancer Security Group ─────────────────────────────────────────────
 # Public-facing EC2 Nginx LB: HTTP/HTTPS from anywhere, SSH from deployer only
+
 resource "aws_security_group" "lb" {
   name        = "${var.project_name}-lb-sg"
   description = "Nginx LB: HTTP/HTTPS from internet, SSH from deployer"
@@ -32,7 +33,7 @@ resource "aws_security_group" "lb" {
   egress {
     from_port   = 0
     to_port     = 0
-    protocol    = "-1"
+    protocol    = "-1"						# All protocols
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -44,6 +45,7 @@ resource "aws_security_group" "lb" {
 
 # ─── Web Instances Security Group ──────────────────────────────────────────────
 # Only receives HTTP from the Nginx LB; SSH from deployer only
+
 resource "aws_security_group" "web" {
   name        = "${var.project_name}-web-sg"
   description = "Web instances: HTTP from LB only, SSH from deployer"
@@ -80,6 +82,7 @@ resource "aws_security_group" "web" {
 
 # ─── Database Security Group ───────────────────────────────────────────────────
 # MariaDB only accessible from web instances; SSH from deployer only
+
 resource "aws_security_group" "db" {
   name        = "${var.project_name}-db-sg"
   description = "DB: MariaDB from web SG only, SSH from deployer"
@@ -116,6 +119,7 @@ resource "aws_security_group" "db" {
 
 # ─── EFS Security Group ────────────────────────────────────────────────────────
 # NFS port only from web instances
+
 resource "aws_security_group" "efs" {
   name        = "${var.project_name}-efs-sg"
   description = "EFS: NFS from web instances only"

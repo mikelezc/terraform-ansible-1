@@ -23,11 +23,11 @@ variable "ssh_private_key_path" {
 }
 
 variable "my_ip" {
-  description = "Your public IP in CIDR notation (e.g. 1.2.3.4/32) — restricts SSH access"
+  description = "Local IP in CIDR notation (e.g. 1.2.3.4/32) — restricts SSH access to my machine"
   type        = string
 }
 
-# Web ASG sizing
+# Web ASG sizing -----------------------------------------------------------------------------
 variable "web_min_size" {
   description = "Minimum number of web instances (evaluation requires >= 2)"
   type        = number
@@ -46,7 +46,7 @@ variable "web_max_size" {
   default     = 4
 }
 
-# Database credentials (store in terraform.tfvars — never commit that file)
+# Database credentials (store in terraform.tfvars — we never commit that file) ---------------
 variable "db_name" {
   description = "WordPress database name"
   type        = string
@@ -71,7 +71,7 @@ variable "db_root_password" {
   sensitive   = true
 }
 
-# DuckDNS (optional)
+# DuckDNS (optional) -------------------------------------------------------------------------
 variable "duckdns_token" {
   description = "DuckDNS token for DNS update (optional, leave empty to skip)"
   type        = string
@@ -85,14 +85,14 @@ variable "duckdns_subdomain" {
   default     = "mlezcano-cloud1"
 }
 
-# Project prefix for resource naming
+# Project prefix for resource naming ----------------------------------------------------------
 variable "project_name" {
   description = "Prefix for all resource names"
   type        = string
   default     = "cloud1"
 }
 
-# WordPress auto-install credentials (used by WP-CLI in cloud-init)
+# WordPress auto-install credentials (used by WP-CLI in cloud-init) ---------------------------
 variable "wp_title" {
   description = "WordPress site title"
   type        = string
