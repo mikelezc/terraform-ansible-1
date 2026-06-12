@@ -1,4 +1,4 @@
-# Cloud-1: Infraestructura Multi-Servidor en AWS
+# Infraestructura Multi-Servidor en AWS
 
 Este documento es la guía completa de la arquitectura y el despliegue del proyecto. 
 
