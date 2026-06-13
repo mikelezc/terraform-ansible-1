@@ -25,8 +25,8 @@ resource "aws_iam_role_policy" "web_s3_read" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["s3:GetObject", "s3:ListBucket"]
+      Effect = "Allow"
+      Action = ["s3:GetObject", "s3:ListBucket"]
       Resource = [
         aws_s3_bucket.config.arn,
         "${aws_s3_bucket.config.arn}/*"

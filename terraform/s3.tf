@@ -1,6 +1,6 @@
 resource "aws_s3_bucket" "config" {
   bucket        = "${var.project_name}-web-config-${random_id.suffix.hex}"
-  force_destroy = true				# Automatically delete all objects when destroying the bucket
+  force_destroy = true # Automatically delete all objects when destroying the bucket
 
   tags = {
     Name    = "${var.project_name}-web-config"
@@ -10,7 +10,7 @@ resource "aws_s3_bucket" "config" {
 
 # We store the Ansible inventory and WP-CLI config in S3 for easy access by web instances (via IAM role)
 resource "random_id" "suffix" {
-  byte_length = 4					# We add a random suffix to the bucket name to ensure uniqueness (S3 bucket names are global).
+  byte_length = 4 # We add a random suffix to the bucket name to ensure uniqueness (S3 bucket names are global).
 }
 
 # We disable versioning to avoid extra costs for this demo, 
