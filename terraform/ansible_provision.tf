@@ -1,11 +1,11 @@
 # Runs Ansible automatically after Terraform creates the infrastructure.
 # This means a single "terraform apply" deploys everything end-to-end.
-#
+
 # Sequence:
 #   1. Wait for SSH to be available on EC2-LB and EC2-DB
 #   2. Wait for ASG web instances to reach InService state
 #   3. Run ansible-playbook (configures Nginx LB + MariaDB)
-#
+
 # Re-triggers if LB IP, DB IP, or ASG name change (i.e. after terraform destroy + apply).
 # For scaling events (terraform apply -var="web_desired=N"), re-run Ansible manually:
 #   ansible-playbook -i inventory.ini playbook.yml -l lb
@@ -64,7 +64,7 @@ resource "null_resource" "ansible_provision" {
       echo "  ASG instances InService"
 
       echo "=== [Ansible] Running playbook ==="
-      cd ${path.module}/..
+      cd ${path.module}/../ansible
       ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i inventory.ini playbook.yml
 
       echo "=== [Ansible] Done. Site available at: https://${aws_cloudfront_distribution.wordpress.domain_name} ==="

@@ -14,7 +14,7 @@ resource "aws_launch_template" "web" {
   }
 
   # Cloud-init script rendered with actual values — runs once on instance startup
-  user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
+  user_data = base64encode(templatefile("${path.module}/templates/user_data.sh.tpl", {
     efs_dns_name      = aws_efs_file_system.wordpress.dns_name
     s3_bucket         = aws_s3_bucket.config.id
     cloudfront_domain = aws_cloudfront_distribution.wordpress.domain_name

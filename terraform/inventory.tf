@@ -1,5 +1,5 @@
 resource "local_file" "ansible_inventory" {
-  content = templatefile("${path.module}/inventory.tpl", {
+  content = templatefile("${path.module}/templates/inventory.tpl", {
     lb_public_ip         = aws_eip.lb.public_ip
     db_public_ip         = aws_instance.db.public_ip
     db_private_ip        = aws_instance.db.private_ip
@@ -15,6 +15,6 @@ resource "local_file" "ansible_inventory" {
     asg_name             = aws_autoscaling_group.web.name
     aws_region           = var.aws_region
   })
-  filename        = "${path.module}/../inventory.ini"
+  filename        = "${path.module}/../ansible/inventory.ini"
   file_permission = "0644"
 }

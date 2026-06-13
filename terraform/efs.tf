@@ -1,7 +1,7 @@
 resource "aws_efs_file_system" "wordpress" {
   creation_token   = "${var.project_name}-wordpress-efs"
   performance_mode = "generalPurpose"
-  throughput_mode  = "bursting"
+  throughput_mode  = "bursting" # Default mode, good for general use and cost-effective for low/moderate throughput
 
   tags = {
     Name    = "${var.project_name}-wordpress-efs"

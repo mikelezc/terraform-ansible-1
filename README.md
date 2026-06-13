@@ -288,7 +288,7 @@ db_public_ip      = "35.180.xx.xx"
 
 La URL de CloudFront es la dirección del sitio.
 
-> **`inventory.ini` se genera automáticamente**: Terraform escribe este fichero al terminar con las IPs reales del LB, la DB y las variables necesarias para Ansible. No hay que tocarlo a mano.
+> **`ansible/inventory.ini` se genera automáticamente**: Terraform escribe este fichero en `ansible/` al terminar con las IPs reales del LB, la DB y las variables necesarias para Ansible. No hay que tocarlo a mano.
 
 ### Fase 2: Esperar a las instancias web (~5 minutos)
 
@@ -301,6 +301,9 @@ Mientras Terraform lanzaba Ansible en el paso anterior, el Auto Scaling Group ar
 Terraform llama a Ansible automáticamente en el despliegue inicial. Solo necesitas ejecutarlo a mano en estos casos:
 
 ```bash
+# Los comandos de Ansible se ejecutan desde la carpeta ansible/
+cd 42_Cloud-1/ansible
+
 # Tras escalar el número de instancias web (actualizar upstream de Nginx):
 ansible-playbook -i inventory.ini playbook.yml -l lb
 
@@ -390,7 +393,7 @@ terraform apply -var="web_desired=4"
 Las nuevas instancias arrancarán con cloud-init y se auto-configurarán. Una vez en estado `running`, actualiza el Nginx LB para que las incluya en el upstream:
 
 ```bash
-cd ..
+cd 42_Cloud-1/ansible
 ansible-playbook -i inventory.ini playbook.yml -l lb
 ```
 
@@ -399,9 +402,9 @@ Para demostrar que el tráfico llega a las nuevas instancias, recargamos el siti
 Para volver a 2 instancias:
 
 ```bash
-cd terraform
+cd 42_Cloud-1/terraform
 terraform apply -var="web_desired=2"
-cd ..
+cd ../ansible
 ansible-playbook -i inventory.ini playbook.yml -l lb
 ```
 
@@ -415,6 +418,7 @@ ansible-playbook -i inventory.ini playbook.yml -l lb
 6. Actualizamos el upstream del Nginx LB:
 
 ```bash
+cd 42_Cloud-1/ansible
 ansible-playbook -i inventory.ini playbook.yml -l lb
 ```
 
@@ -437,19 +441,19 @@ terraform show
 ### Reiniciar los contenedores en el servidor de base de datos
 
 ```bash
-# Desde la carpeta 42_Cloud-1/ (donde está inventory.ini):
-cd 42_Cloud-1
+# Desde la carpeta 42_Cloud-1/ansible/ (donde está inventory.ini):
+cd 42_Cloud-1/ansible
 DB_IP=$(grep -A1 '^\[db\]' inventory.ini | tail -1 | awk '{print $1}')
 ssh -i ~/.ssh/cloud-1-key.pem ubuntu@$DB_IP
 # Una vez dentro del servidor:
-cd /home/ubuntu/db && docker sudo compose restart
+cd /home/ubuntu/db && docker compose restart
 ```
 
 ### Conectarse al Nginx LB
 
 ```bash
-# Desde la carpeta 42_Cloud-1/:
-cd 42_Cloud-1
+# Desde la carpeta 42_Cloud-1/ansible/:
+cd 42_Cloud-1/ansible
 LB_IP=$(grep -A1 '^\[lb\]' inventory.ini | tail -1 | awk '{print $1}')
 ssh -i ~/.ssh/cloud-1-key.pem ubuntu@$LB_IP
 
@@ -484,7 +488,7 @@ terraform apply
 #    El ASG las reemplaza automáticamente con el nuevo script de arranque
 
 # 3. Actualizar el certificado del LB (si cambiaste los campos del cert):
-cd ..
+cd 42_Cloud-1/ansible
 ansible-playbook -i inventory.ini playbook.yml -l lb
 ```
 
@@ -493,7 +497,7 @@ ansible-playbook -i inventory.ini playbook.yml -l lb
 Si queremos dejar el LB y la DB completamente limpios para volver a desplegar desde cero:
 
 ```bash
-cd 42_Cloud-1/
+cd 42_Cloud-1/ansible
 ansible-playbook -i inventory.ini reset.yml
 # Y a continuación:
 ansible-playbook -i inventory.ini playbook.yml
@@ -530,7 +534,11 @@ Terraform pedirá confirmación con `yes`. Eliminará absolutamente todo:
 ```
 42_Cloud-1/
 │
-├── terraform/                    # Infraestructura AWS como código
+├── README.md
+├── apuntes/                      # Apuntes del proyecto + hoja de ruta certificación Terraform
+├── guide_photos/                 # Capturas para el README
+│
+├── terraform/                    # Capa de infraestructura (Terraform)
 │   ├── main.tf                   # Provider AWS (eu-west-3), data sources
 │   ├── variables.tf              # Variables: web_desired, instance_type, credentials...
 │   ├── outputs.tf                # Salidas: URL, IPs, ASG name...
@@ -542,35 +550,35 @@ Terraform pedirá confirmación con `yes`. Eliminará absolutamente todo:
 │   ├── efs.tf                    # Sistema de ficheros compartido
 │   ├── asg.tf                    # Launch Template + Auto Scaling Group + CloudWatch
 │   ├── cloudfront.tf             # CDN (origin = Elastic IP del LB)
-│   ├── inventory.tf              # Genera inventory.ini para Ansible
-│   ├── user_data.sh.tpl          # Script cloud-init de las instancias web
-│   ├── docker-compose.web.yml.tpl # Docker Compose para instancias web
-│   ├── nginx.web.conf.tpl        # Nginx de instancias web (port 80, X-Served-By)
-│   ├── env_web.tpl               # Template del fichero .env
-│   ├── inventory.tpl             # Template de inventory.ini
-│   └── terraform.tfvars.example  # Variables de ejemplo (copiar a .tfvars)
+│   ├── inventory.tf              # Genera ansible/inventory.ini tras el apply
+│   ├── ansible_provision.tf      # Lanza Ansible automáticamente tras crear la infra
+│   ├── terraform.tfvars.example  # Variables de ejemplo (copiar a .tfvars)
+│   └── templates/                # Plantillas renderizadas por Terraform
+│       ├── user_data.sh.tpl      # Script cloud-init de las instancias web
+│       ├── docker-compose.web.yml.tpl
+│       ├── nginx.web.conf.tpl
+│       ├── env_web.tpl
+│       └── inventory.tpl         # Template de ansible/inventory.ini
 │
-├── roles/
-│   ├── docker/                   # Instala Docker en cualquier EC2 Ubuntu
-│   ├── loadbalancer/             # Configura Nginx LB en EC2-LB
-│   │   ├── tasks/main.yml        # Descubre IPs del ASG, genera config, arranca Nginx
-│   │   └── templates/
-│   │       ├── nginx.lb.conf.j2  # Upstream dinámico con IPs de instancias web
-│   │       └── docker-compose.lb.yml.j2
-│   └── database/                 # Despliega MariaDB en EC2-DB
-│       ├── tasks/main.yml
-│       └── templates/
-│           ├── docker-compose.db.yml.j2
-│           └── .env.db.j2        # Credenciales desde inventory.ini
-│
-├── group_vars/
-│   └── all.yml                   # Variables compartidas de Ansible
-│
-├── playbook.yml                  # Configura LB (rol loadbalancer) y DB (rol database)
-├── reset.yml                     # Reinicia LB y DB (para demos)
-├── ansible.cfg                   # Configuración de Ansible
-├── inventory.ini                 # AUTO-GENERADO por terraform apply
-└── .gitignore                    # Protege terraform.tfvars, inventory.ini, .pem, etc.
+└── ansible/                      # Capa de configuración (Ansible)
+    ├── ansible.cfg
+    ├── playbook.yml              # Configura LB (loadbalancer) y DB (database)
+    ├── reset.yml                 # Reinicia LB y DB (para demos)
+    ├── inventory.ini             # AUTO-GENERADO por terraform apply
+    ├── group_vars/
+    │   └── all.yml
+    └── roles/
+        ├── docker/               # Instala Docker en cualquier EC2 Ubuntu
+        ├── loadbalancer/         # Configura Nginx LB en EC2-LB
+        │   ├── tasks/main.yml    # Descubre IPs del ASG, genera config, arranca Nginx
+        │   └── templates/
+        │       ├── nginx.lb.conf.j2
+        │       └── docker-compose.lb.yml.j2
+        └── database/             # Despliega MariaDB en EC2-DB
+            ├── tasks/main.yml
+            └── templates/
+                ├── docker-compose.db.yml.j2
+                └── .env.db.j2
 ```
 
 ---
