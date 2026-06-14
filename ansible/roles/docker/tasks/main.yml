@@ -1,5 +1,5 @@
 ---
-# tasks file for docker role
+# tasks file for installing Docker and docker-compose on EC2 instances
 
 - name: Update apt cache and install Docker (Ubuntu/Debian)
   apt:

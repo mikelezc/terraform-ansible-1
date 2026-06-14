@@ -1,5 +1,5 @@
 ---
-# Deploy MariaDB on EC2-DB — standalone, no web services here
+# task file for installing and configuring MariaDB database in Docker container
 
 - name: Create MariaDB data directory
   file:

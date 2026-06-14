@@ -1,6 +1,5 @@
-# Nginx load balancer configuration
-# Upstream: private IPs of ASG web instances (discovered by Ansible at deploy time)
-# Re-run Ansible after scaling to refresh this list.
+# This file is a Jinja2 template for the Nginx load balancer configuration
+# Jinja2 are configuration templates used by Ansible to generate configuration files
 
 upstream wordpress_backends {
 {% for ip in web_instance_ips %}

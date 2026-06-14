@@ -1,10 +1,6 @@
 ---
 # Reset playbook — destroys the deployed environment on LB and DB servers.
 # Web instances are ephemeral (ASG) — terminate them via AWS Console or scale to 0:
-#   aws autoscaling set-desired-capacity \
-#     --auto-scaling-group-name cloud1-web-asg --desired-capacity 0
-
-# Full infrastructure teardown (recommended): cd terraform && terraform destroy
 
 - name: Reset load balancer
   hosts: lb
