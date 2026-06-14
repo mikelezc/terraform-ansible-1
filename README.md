@@ -72,6 +72,19 @@ Antes de ejecutar cualquier cosa, necesitamos configurar lo siguiente en la máq
 
 ### Herramientas
 
+**Opción A — Contenedor Docker (recomendado para máquinas de 42):**
+
+El repositorio incluye un contenedor con todas las herramientas preinstaladas (Terraform, Ansible, AWS CLI). Es la opción más sencilla y funciona en cualquier máquina con Docker:
+
+```bash
+# Desde la raíz del repositorio:
+./docker/cloud1-tools.sh
+# El contenedor monta el proyecto en /workspace — todos los comandos de esta guía
+# que usan la ruta 42_Cloud-1/ se ejecutan como /workspace/ dentro del contenedor.
+```
+
+**Opción B — Instalación local:**
+
 ```bash
 # macOS — Terraform requiere el tap oficial de HashiCorp (no está en Homebrew core):
 brew tap hashicorp/tap
@@ -158,12 +171,18 @@ wp_admin_password = "mi_password_wp_seguro"
 # wp_admin_email = "admin@example.com"     # email del admin
 # wp_title       = "Cloud-1"              # título del sitio
 
+# Opcional: email para recibir alertas de CloudWatch (SNS) — dejar vacío para desactivar
+# Tras el apply, confirmar el enlace que llega al correo antes de que lleguen alertas.
+# alert_email = "tu-email@ejemplo.com"
+
 # Opcional: DuckDNS (si queremos un dominio concreto)
 # duckdns_token     = "tu-token-de-duckdns"
 # duckdns_subdomain = "mlezcano-cloud1"
 ```
 
 > **Nunca subas `terraform.tfvars` a git.** Está en el `.gitignore`. Contiene todas las contraseñas.
+
+> **IP dinámica**: si tu IP pública cambia entre sesiones (ISP con IP dinámica), actualiza `my_ip` antes de cada `terraform apply`. Obtén la IP actual con `curl ifconfig.me`. Si no lo haces, el Security Group bloqueará el SSH y Ansible no podrá conectarse.
 
 Las variables de WordPress funcionan así:
 - `wp_admin_password` es obligatoria (no tiene valor por defecto).
@@ -204,9 +223,6 @@ terraform apply
 > terraform plan -out=tfplan   # guarda el plan en un archivo
 > terraform apply tfplan       # aplica exactamente ese plan
 > ```
-
-```bash
-```
 
 Terraform creará, en orden aproximado:
 
@@ -469,6 +485,17 @@ Terraform pedirá confirmación con `yes`. Eliminará absolutamente todo:
 
 > **Atención**: `terraform destroy` borra los datos de WordPress de forma permanente. Esto es correcto para un entorno de práctica.
 
+### Si `terraform destroy` deja recursos huérfanos
+
+Si hubo applies interrumpidos con Ctrl+C, algunos recursos pueden quedar fuera del estado de Terraform y el destroy no los elimina. En ese caso usa el script de limpieza:
+
+```bash
+# Desde dentro del contenedor cloud1-tools:
+./docker/cloud1-cleanup.sh
+```
+
+El script encuentra y elimina todos los recursos AWS con el tag `Project=cloud1`, independientemente del estado de Terraform. Incluye CloudFront (que requiere ser deshabilitado antes de eliminar, el script lo gestiona automáticamente).
+
 ---
 
 ## 10. Estructura del Repositorio
@@ -477,8 +504,12 @@ Terraform pedirá confirmación con `yes`. Eliminará absolutamente todo:
 42_Cloud-1/
 │
 ├── README.md
-├── apuntes/                      # Apuntes del proyecto + hoja de ruta certificación Terraform
 ├── guide_photos/                 # Capturas para el README
+│
+├── docker/                       # Contenedor de herramientas para despliegue
+│   ├── cloud1-tools.sh           # Lanza el contenedor con terraform, ansible, aws
+│   ├── cloud1-cleanup.sh         # Limpieza de emergencia (elimina todos los recursos cloud1)
+│   └── Dockerfile.tools          # Ubuntu 22.04 + Terraform + Ansible + AWS CLI
 │
 ├── terraform/                    # Capa de infraestructura (Terraform)
 │   ├── main.tf                   # Provider AWS (eu-west-3), data sources
@@ -492,6 +523,7 @@ Terraform pedirá confirmación con `yes`. Eliminará absolutamente todo:
 │   ├── efs.tf                    # Sistema de ficheros compartido
 │   ├── asg.tf                    # Launch Template + Auto Scaling Group + CloudWatch
 │   ├── cloudfront.tf             # CDN (origin = Elastic IP del LB)
+│   ├── sns.tf                    # Alertas email via SNS (opcional, requiere alert_email)
 │   ├── inventory.tf              # Genera ansible/inventory.ini tras el apply
 │   ├── ansible_provision.tf      # Lanza Ansible automáticamente tras crear la infra
 │   ├── terraform.tfvars.example  # Variables de ejemplo (copiar a .tfvars)
