@@ -6,6 +6,9 @@ terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/*.tfplan
 terraform/.terraform.tfstate.lock.info
+# Root-level state (if terraform was accidentally run outside terraform/)
+terraform.tfstate
+terraform.tfstate.backup
 
 # Ansible secrets
 ansible/roles/database/files/.env.db.local

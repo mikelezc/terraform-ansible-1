@@ -26,7 +26,7 @@ wp_admin_password = "choose_a_strong_wp_password"
 
 # Optional: DuckDNS (leave empty to skip DNS update)
 # duckdns_token     = "your-duckdns-token"
-# duckdns_subdomain = "mlezcano-cloud1"
+# duckdns_subdomain = "your-duckdns-subdomain"
 
 # Optional overrides (defaults are fine for evaluation)
 # aws_region    = "eu-west-3"

@@ -36,65 +36,7 @@ Las instancias web se auto-configuran solas al arrancar mediante un script de `c
 
 ## 2. Arquitectura Completa
 
-```
-                        INTERNET
-                           │
-                           ▼
-              ┌─────────────────────────┐
-              │   AWS CloudFront (CDN)  │
-              │   dominio: xxxx.cloudfront.net
-              │   - HTTPS para el usuario
-              │   - Caché de /wp-content/*
-              └────────────┬────────────┘
-                           │ HTTP (puerto 80, interno)
-                           ▼
-              ┌─────────────────────────┐
-              │  EC2-LB (t3.micro)      │
-              │  Ubuntu 22.04           │
-              │  Elastic IP (estable)   │
-              │  Docker: Nginx LB       │
-              │  - Round-robin a webs   │
-              │  - Failover pasivo      │
-              │  - Puerto 443 con cert  │
-              │    auto-firmado         │
-              └──────┬──────────┬───────┘
-                     │          │  Round-robin
-           ┌─────────┘          └─────────┐
-           ▼                              ▼
-  ┌────────────────┐           ┌────────────────┐
-  │  EC2-Web-1     │           │  EC2-Web-2     │  ← Auto Scaling Group
-  │  Ubuntu 22.04  │           │  Ubuntu 22.04  │    (mín. 2, máx. 4)
-  │  Docker:       │           │  Docker:       │
-  │  · Nginx       │           │  · Nginx       │
-  │  · WP PHP-FPM  │           │  · WP PHP-FPM  │
-  │  · phpMyAdmin  │           │  · phpMyAdmin  │
-  └───────┬────────┘           └────────┬───────┘
-          │                             │
-          └──────────────┬──────────────┘
-                         │ puerto 3306 (red privada AWS)
-                         ▼
-              ┌─────────────────────────┐
-              │  EC2-DB (t3.micro)      │
-              │  Ubuntu 22.04           │
-              │  Docker: MariaDB        │
-              │  (solo accesible desde  │
-              │   las instancias web)   │
-              └─────────────────────────┘
-
-  ┌─────────────────────────────────────────────┐
-  │  AWS EFS (Elastic File System)              │
-  │  Montado en /home/ubuntu/data/wordpress     │
-  │  en AMBAS instancias web                    │
-  │  → Uploads y wp-content compartidos         │
-  └─────────────────────────────────────────────┘
-
-  ┌─────────────────────────────────────────────┐
-  │  AWS S3 (bucket privado)                    │
-  │  Almacena: docker-compose.yml,              │
-  │  nginx.conf, .env para las instancias web   │
-  │  → cloud-init lo descarga al arrancar       │
-  └─────────────────────────────────────────────┘
-```
+![AWS arquitectura](guide_photos/AWS_Architecture.png)
 
 ### Desglose de componentes
 

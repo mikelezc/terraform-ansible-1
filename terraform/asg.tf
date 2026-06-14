@@ -149,8 +149,8 @@ resource "aws_cloudwatch_metric_alarm" "instances_low" {
   statistic           = "Average"
   threshold           = var.web_min_size
   alarm_description   = "InService web instances dropped below minimum — instance failure detected"
-  alarm_actions       = [aws_sns_topic.alerts[0].arn]
-  ok_actions          = [aws_sns_topic.alerts[0].arn]
+  alarm_actions       = local.sns_alert_arns
+  ok_actions          = local.sns_alert_arns
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.web.name

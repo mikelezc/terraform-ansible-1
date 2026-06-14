@@ -54,18 +54,18 @@ output "deploy_instructions" {
     LB Elastic IP:     ${aws_eip.lb.public_ip}
     Site URL:          https://${aws_cloudfront_distribution.wordpress.domain_name}
 
-    1. Configure LB + DB with Ansible:
-       cd ..
-       ansible-playbook -i inventory.ini playbook.yml
+    Ansible ran automatically — LB and DB are configured.
 
-    2. Wait 5 minutes for web instances to bootstrap via cloud-init
+    1. Wait ~5 min for web instances to bootstrap via cloud-init
+       (AWS Console → EC2 → Instances to monitor progress)
 
-    3. Access site: https://${aws_cloudfront_distribution.wordpress.domain_name}
+    2. Access site: https://${aws_cloudfront_distribution.wordpress.domain_name}
 
-    4. After scaling (terraform apply -var="web_desired=N"), update nginx:
+    3. After scaling (terraform apply -var="web_desired=N"), refresh LB config:
+       cd /workspace/ansible
        ansible-playbook -i inventory.ini playbook.yml -l lb
 
-    5. Destroy everything when done:
+    4. Destroy everything when done:
        terraform destroy
 
     ============================================================
