@@ -86,10 +86,13 @@ cd /home/ubuntu/inception
 docker compose up -d
 
 # ─── Wait for WordPress to initialize ─────────────────────────────────────────
-echo "=== [cloud-init] Waiting for WordPress wp-config.php ==="
-for i in $(seq 1 24); do
-  if [ -f /home/ubuntu/data/wordpress/wp-config.php ]; then
-    echo "wp-config.php found after $${i}x5s"
+# wp-config.php appears quickly (entrypoint creates it first).
+# wp-includes/version.php appears only after the container finishes copying
+# WordPress core files to the EFS mount — this is what WP-CLI actually needs.
+echo "=== [cloud-init] Waiting for WordPress core files on EFS ==="
+for i in $(seq 1 60); do
+  if [ -f /home/ubuntu/data/wordpress/wp-includes/version.php ]; then
+    echo "WordPress core files ready after $${i}x5s"
     break
   fi
   sleep 5
