@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Web instance services — MariaDB runs on EC2-DB (separate instance)
 # DB host: ${db_private_ip}
 

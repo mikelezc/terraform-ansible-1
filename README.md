@@ -317,7 +317,7 @@ Ansible hace dos cosas:
 
 2. **En EC2-DB**: instala Docker y arranca MariaDB con las credenciales que definiste en `terraform.tfvars`.
 
-### Fase 4: Acceder al sitio
+### Fase 3: Acceder al sitio
 
 ```bash
 # Ver todos los outputs (URL, IPs, nombre del ASG...):

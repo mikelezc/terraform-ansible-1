@@ -38,6 +38,11 @@ output "asg_name" {
   value       = aws_autoscaling_group.web.name
 }
 
+output "sns_confirm_note" {
+  description = "Reminder to confirm the SNS email subscription"
+  value       = var.alert_email != "" ? "ACTION REQUIRED: check ${var.alert_email} and click the AWS confirmation link to activate alerts." : null
+}
+
 output "deploy_instructions" {
   description = "Next steps after terraform apply"
   value       = <<-EOT

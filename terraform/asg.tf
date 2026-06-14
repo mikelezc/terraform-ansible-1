@@ -112,7 +112,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   statistic           = "Average"
   threshold           = 70
   alarm_description   = "Scale up when CPU > 70%"
-  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
+  alarm_actions       = concat([aws_autoscaling_policy.scale_up.arn], local.sns_alert_arns)
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.web.name
@@ -129,7 +129,28 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   statistic           = "Average"
   threshold           = 30
   alarm_description   = "Scale down when CPU < 30%"
-  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
+  alarm_actions       = concat([aws_autoscaling_policy.scale_down.arn], local.sns_alert_arns)
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.web.name
+  }
+}
+
+# Alert when running web instances drop below the configured minimum.
+# Fires when the ASG cannot replace a failed instance fast enough.
+resource "aws_cloudwatch_metric_alarm" "instances_low" {
+  count               = var.alert_email != "" ? 1 : 0
+  alarm_name          = "${var.project_name}-instances-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "GroupInServiceInstances"
+  namespace           = "AWS/AutoScaling"
+  period              = 60
+  statistic           = "Average"
+  threshold           = var.web_min_size
+  alarm_description   = "InService web instances dropped below minimum — instance failure detected"
+  alarm_actions       = [aws_sns_topic.alerts[0].arn]
+  ok_actions          = [aws_sns_topic.alerts[0].arn]
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.web.name

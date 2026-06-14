@@ -17,6 +17,11 @@
 # ─── TLS certificate (self-signed) ────────────────────────────────────────────
 # Used for direct HTTPS access to the LB (port 443).
 
+- name: Ensure cryptography module is installed
+  pip:
+    name: cryptography
+    state: present
+
 - name: Generate OpenSSL private key
   openssl_privatekey:
     path: /home/ubuntu/lb/ssl/server.key
@@ -45,11 +50,6 @@
 # This runs on the local (control) machine, not on the LB EC2.
 # Re-run the playbook after any scaling event to refresh the upstream list.
 
-- name: Ensure cryptography module is installed
-  pip:
-    name: cryptography
-    state: present
-
 - name: Get web instance private IPs from ASG
   shell: >
     aws ec2 describe-instances
@@ -61,7 +61,7 @@
     --region {{ aws_region }}
   register: web_ips_raw
   delegate_to: localhost
-  become: no
+  become: false
   changed_when: false
 
 - name: Parse web instance IPs

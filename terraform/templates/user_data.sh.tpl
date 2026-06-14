@@ -20,7 +20,8 @@ systemctl enable docker
 systemctl start docker
 
 # Docker Compose v2
-curl -fsSL "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64" \
+COMPOSE_ARCH=$(uname -m)
+curl -fsSL "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-$${COMPOSE_ARCH}" \
   -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
 ln -sf /usr/local/bin/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose 2>/dev/null || true
@@ -81,7 +82,7 @@ chown -R ubuntu:ubuntu /home/ubuntu/
 # ─── Start services ───────────────────────────────────────────────────────────
 echo "=== [cloud-init] Starting Docker Compose stack ==="
 cd /home/ubuntu/inception
-docker-compose up -d
+docker compose up -d
 
 # ─── Wait for WordPress to initialize ─────────────────────────────────────────
 echo "=== [cloud-init] Waiting for WordPress wp-config.php ==="

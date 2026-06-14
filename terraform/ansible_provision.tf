@@ -16,7 +16,6 @@ resource "null_resource" "ansible_provision" {
     aws_eip.lb,
     aws_instance.db,
     aws_autoscaling_group.web,
-    aws_cloudfront_distribution.wordpress,
   ]
 
   triggers = {

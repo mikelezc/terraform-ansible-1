@@ -116,3 +116,9 @@ variable "wp_admin_email" {
   type        = string
   default     = "admin@example.com"
 }
+
+variable "alert_email" {
+  description = "Email address for CloudWatch alarm notifications (leave empty to disable)"
+  type        = string
+  default     = ""
+}

@@ -5,8 +5,6 @@
 - name: Reset load balancer
   hosts: lb
   become: yes
-  vars:
-    deploy_user: ubuntu
 
   tasks:
     - name: Stop Nginx LB Docker compose stack
@@ -27,8 +25,6 @@
 - name: Reset database server environment
   hosts: db
   become: yes
-  vars:
-    deploy_user: ubuntu
 
   tasks:
     - name: Stop and remove MariaDB Docker compose stack (including volumes)
