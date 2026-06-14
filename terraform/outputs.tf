@@ -38,6 +38,11 @@ output "asg_name" {
   value       = aws_autoscaling_group.web.name
 }
 
+output "duckdns_url" {
+  description = "DuckDNS domain pointing to the LB (if configured)"
+  value       = nonsensitive(var.duckdns_token) != "" ? "https://${var.duckdns_subdomain}.duckdns.org" : null
+}
+
 output "sns_confirm_note" {
   description = "Reminder to confirm the SNS email subscription"
   value       = var.alert_email != "" ? "ACTION REQUIRED: check ${var.alert_email} and click the AWS confirmation link to activate alerts." : null

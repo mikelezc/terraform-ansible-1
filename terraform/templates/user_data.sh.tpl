@@ -24,7 +24,8 @@ COMPOSE_ARCH=$(uname -m)
 curl -fsSL "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-$${COMPOSE_ARCH}" \
   -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
-ln -sf /usr/local/bin/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose 2>/dev/null || true
+mkdir -p /usr/local/lib/docker/cli-plugins
+ln -sf /usr/local/bin/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
 
 usermod -aG docker ubuntu
 
