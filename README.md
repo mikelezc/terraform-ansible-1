@@ -1,9 +1,5 @@
 # Infraestructura Multi-Servidor en AWS
 
-Este documento es la guía completa de la arquitectura y el despliegue del proyecto. 
-
----
-
 ## 1. Conceptos Fundamentales del Proyecto
 
 La infraestructura se distribuye entre varias máquinas EC2 de AWS, y todo se aprovisiona mediante **dos capas de automatización**:
@@ -419,7 +415,7 @@ ssh -i ~/.ssh/cloud-1-key.pem ubuntu@$LB_IP
 cat /home/ubuntu/lb/nginx.conf
 
 # Ver los logs del LB:
-docker logs nginx-lb
+sudo docker logs nginx-lb
 ```
 
 ### Ver logs de cloud-init en instancias web
