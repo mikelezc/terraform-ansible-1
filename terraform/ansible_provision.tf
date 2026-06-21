@@ -7,7 +7,7 @@
 #   3. Run ansible-playbook (configures Nginx LB + MariaDB)
 
 # Re-triggers if LB IP, DB IP, or ASG name change (i.e. after terraform destroy + apply).
-# For scaling events (terraform apply -var="web_desired=N"), re-run Ansible manually:
+# For scaling events (terraform apply -var="web_desired=N"), re-run Ansible manually in the Ansible directory:
 #   ansible-playbook -i inventory.ini playbook.yml -l lb
 
 resource "null_resource" "ansible_provision" {

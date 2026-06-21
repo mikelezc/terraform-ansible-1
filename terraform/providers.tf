@@ -1,3 +1,5 @@
+# Terraform block specifies the required version of Terraform and the providers used in this configuration. 
+# It ensures that the correct versions of the providers are installed and used, which helps maintain compatibility and stability.
 terraform {
   required_version = ">= 1.5"
   required_providers {
@@ -20,6 +22,7 @@ terraform {
   }
 }
 
+# The provider block configures the AWS provider with the specified region.
 provider "aws" {
   region = var.aws_region
 }

@@ -1,3 +1,8 @@
+# We use data blocks to retrieve information about our existing AWS resources,
+# such as availability zones, VPCs, subnets, and AMIs. 
+# This allows us to reference these resources in our Terraform configuration without hardcoding their values.
+# We put it in main.tf because it is a central place for defining the infrastructure resources and their dependencies.
+
 data "aws_availability_zones" "available" {
   state = "available"
 }
