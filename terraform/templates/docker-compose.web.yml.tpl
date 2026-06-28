@@ -3,7 +3,7 @@
 
 services:
   nginx:
-    image: nginx:latest
+    image: ${nginx_image}
     container_name: nginx
     restart: always
     ports:
@@ -19,7 +19,7 @@ services:
       - inception_network
 
   wordpress:
-    image: wordpress:6-fpm
+    image: ${wordpress_image}
     container_name: wordpress
     restart: always
     environment:
@@ -35,7 +35,7 @@ services:
       - "9000"
 
   phpmyadmin:
-    image: phpmyadmin:latest
+    image: ${phpmyadmin_image}
     container_name: phpmyadmin
     restart: always
     environment:

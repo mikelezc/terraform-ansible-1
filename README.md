@@ -376,6 +376,108 @@ cd 42_Cloud-1/ansible
 ansible-playbook -i inventory.ini playbook.yml -l lb
 ```
 
+### Pruebas de resiliencia de componentes
+
+Esta tabla resume qué ocurre y qué hay que hacer manualmente si cada componente es eliminado:
+
+| Componente eliminado | Auto-recuperación | Datos afectados | Pasos manuales necesarios |
+|---|---|---|---|
+| Web EC2 (ASG) | ✅ Sí (ASG + cloud-init) | Ninguno | `playbook.yml -l lb` (actualizar upstream) |
+| LB EC2 | ❌ No | Ninguno | `terraform apply` + `playbook.yml -l lb` |
+| DB EC2 | ❌ No | ⚠️ Datos de MariaDB perdidos | `terraform apply` + `playbook.yml -l db` |
+
+---
+
+#### Escenario A: Terminar una instancia web
+
+Simula un fallo de hardware en un servidor web. Para probarlo: AWS Console → EC2 → Instances → seleccionar una instancia `cloud1-web` → Terminate instance.
+
+**Qué ocurre automáticamente:**
+
+- El ASG detecta que hay una instancia menos de las mínimas configuradas y lanza una de reemplazo (~1 min).
+- La nueva instancia se auto-configura vía `cloud-init`: instala Docker, monta el EFS, descarga la config de S3 y arranca WordPress (~5 min). No hace falta ejecutar Ansible.
+- Mientras tanto, Nginx LB detecta de forma pasiva que ese backend no responde y deja de enviarle tráfico. El sitio sigue funcionando con la instancia restante sin interrupción.
+
+**Qué no es automático:**
+
+La nueva instancia del ASG tiene una IP privada distinta a la que tenía la anterior. Nginx LB sigue teniendo la IP vieja en su bloque `upstream` → el tráfico no llega a la nueva instancia. Cuando la instancia esté en estado `running`, hay que actualizar el LB:
+
+```bash
+cd 42_Cloud-1/terraform
+terraform apply          # regenera inventory.ini con las IPs actuales del ASG
+
+cd ../ansible
+ansible-playbook -i inventory.ini playbook.yml -l lb
+```
+
+---
+
+#### Escenario B: Terminar el LB
+
+Simula un fallo del balanceador. Para probarlo: AWS Console → EC2 → Instances → terminar la instancia `cloud1-lb`.
+
+**Qué ocurre:**
+
+- El sitio deja de responder inmediatamente (CloudFront no puede llegar al origen).
+- El LB es una EC2 standalone, no está en un ASG → no se recupera solo.
+- Las instancias web y la DB siguen corriendo sin ningún cambio.
+
+**Pasos para recuperar:**
+
+```bash
+# 1. Crear nueva instancia LB + nueva Elastic IP + regenerar inventory.ini
+cd 42_Cloud-1/terraform
+terraform apply
+
+# 2. Configurar Nginx en la nueva instancia
+#    Las IPs de las instancias web no han cambiado, así que inventory.ini ya las tiene correctas
+cd ../ansible
+ansible-playbook -i inventory.ini playbook.yml -l lb
+```
+
+> CloudFront puede tardar varios minutos en detectar el cambio de origin (nueva IP del LB). El sitio volverá a responder una vez Nginx esté corriendo y CloudFront haya propagado la nueva ruta.
+
+---
+
+#### Escenario C: Terminar el DB EC2
+
+Simula un fallo del servidor de base de datos. Para probarlo: AWS Console → EC2 → Instances → terminar la instancia `cloud1-db`.
+
+**Qué ocurre:**
+
+- WordPress muestra `Error establishing a database connection` en todas las páginas.
+- Los datos de MariaDB (posts, usuarios, configuración del sitio) se pierden: el volumen EBS se elimina junto con la instancia al terminarla.
+- Los ficheros de WordPress (themes, plugins, imágenes subidas) sobreviven intactos en el EFS.
+
+**Pasos para recuperar:**
+
+```bash
+# 1. Crear nueva instancia DB + regenerar inventory.ini
+cd 42_Cloud-1/terraform
+terraform apply
+
+# 2. Desplegar MariaDB en la nueva instancia con las credenciales originales de terraform.tfvars
+cd ../ansible
+ansible-playbook -i inventory.ini playbook.yml -l db
+```
+
+MariaDB arrancará vacío. WordPress detectará que no está instalado en la base de datos. Para reinstalarlo sin esperar a que el ASG lance una nueva instancia web (que lo haría automáticamente vía WP-CLI en cloud-init):
+
+```bash
+# Conectarse a cualquier instancia web (IP visible en AWS Console o en terraform output)
+ssh -i ~/.ssh/cloud-1-key.pem ubuntu@IP_INSTANCIA_WEB
+
+# Reinstalar WordPress con WP-CLI (mismo comando que ejecuta cloud-init en el arranque)
+docker exec -u root wordpress wp core install \
+  --url="https://TU_CLOUDFRONT_DOMAIN" \
+  --title="Cloud-1" \
+  --admin_user="admin" \
+  --admin_password="TU_WP_PASSWORD" \
+  --admin_email="admin@example.com" \
+  --skip-email \
+  --allow-root
+```
+
 ---
 
 ## 8. Gestión del Entorno

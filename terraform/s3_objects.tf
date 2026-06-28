@@ -1,7 +1,10 @@
 locals {
   docker_compose_web_content = templatefile("${path.module}/templates/docker-compose.web.yml.tpl", {
-    db_private_ip = aws_instance.db.private_ip
-    project_name  = var.project_name
+    db_private_ip    = aws_instance.db.private_ip
+    project_name     = var.project_name
+    nginx_image      = var.nginx_image
+    wordpress_image  = var.wordpress_image
+    phpmyadmin_image = var.phpmyadmin_image
   })
 
   nginx_web_conf_content = file("${path.module}/templates/nginx.web.conf.tpl")

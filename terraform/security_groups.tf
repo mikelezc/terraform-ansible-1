@@ -8,24 +8,24 @@ resource "aws_security_group" "lb" {
 
   ingress {
     description = "HTTP from internet"
-    from_port   = 80
-    to_port     = 80
+    from_port   = local.port_http
+    to_port     = local.port_http
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
     description = "HTTPS from internet"
-    from_port   = 443
-    to_port     = 443
+    from_port   = local.port_https
+    to_port     = local.port_https
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
     description = "SSH from deployer"
-    from_port   = 22
-    to_port     = 22
+    from_port   = local.port_ssh
+    to_port     = local.port_ssh
     protocol    = "tcp"
     cidr_blocks = [var.my_ip]
   }
@@ -53,16 +53,16 @@ resource "aws_security_group" "web" {
 
   ingress {
     description     = "HTTP from Nginx LB"
-    from_port       = 80
-    to_port         = 80
+    from_port       = local.port_http
+    to_port         = local.port_http
     protocol        = "tcp"
     security_groups = [aws_security_group.lb.id]
   }
 
   ingress {
     description = "SSH from deployer"
-    from_port   = 22
-    to_port     = 22
+    from_port   = local.port_ssh
+    to_port     = local.port_ssh
     protocol    = "tcp"
     cidr_blocks = [var.my_ip]
   }
@@ -90,16 +90,16 @@ resource "aws_security_group" "db" {
 
   ingress {
     description     = "MariaDB from web instances"
-    from_port       = 3306
-    to_port         = 3306
+    from_port       = local.port_mariadb
+    to_port         = local.port_mariadb
     protocol        = "tcp"
     security_groups = [aws_security_group.web.id]
   }
 
   ingress {
     description = "SSH from deployer"
-    from_port   = 22
-    to_port     = 22
+    from_port   = local.port_ssh
+    to_port     = local.port_ssh
     protocol    = "tcp"
     cidr_blocks = [var.my_ip]
   }
@@ -127,8 +127,8 @@ resource "aws_security_group" "efs" {
 
   ingress {
     description     = "NFS from web instances"
-    from_port       = 2049
-    to_port         = 2049
+    from_port       = local.port_nfs
+    to_port         = local.port_nfs
     protocol        = "tcp"
     security_groups = [aws_security_group.web.id]
   }

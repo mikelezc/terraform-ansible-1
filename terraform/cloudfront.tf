@@ -64,8 +64,8 @@ resource "aws_cloudfront_distribution" "wordpress" {
     }
 
     min_ttl     = 0
-    default_ttl = 86400    # 1 day
-    max_ttl     = 31536000 # 1 year
+    default_ttl = local.cf_default_ttl
+    max_ttl     = local.cf_max_ttl
   }
 
   ordered_cache_behavior {
@@ -85,8 +85,8 @@ resource "aws_cloudfront_distribution" "wordpress" {
     }
 
     min_ttl     = 0
-    default_ttl = 86400
-    max_ttl     = 31536000
+    default_ttl = local.cf_default_ttl
+    max_ttl     = local.cf_max_ttl
   }
 
   restrictions {

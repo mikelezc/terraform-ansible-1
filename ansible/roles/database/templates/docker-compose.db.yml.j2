@@ -9,7 +9,7 @@ services:
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - /home/ubuntu/data/mariadb:/var/lib/mysql
+      - /home/{{ deploy_user }}/data/mariadb:/var/lib/mysql
     ports:
       # Exposed to host — web instances connect via private IP
       # Access is restricted by Security Group (only SG-Web can reach port 3306)

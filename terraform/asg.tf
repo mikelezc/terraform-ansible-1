@@ -15,20 +15,21 @@ resource "aws_launch_template" "web" {
 
   # Cloud-init script rendered with actual values — runs once on instance startup
   user_data = base64encode(templatefile("${path.module}/templates/user_data.sh.tpl", {
-    efs_dns_name      = aws_efs_file_system.wordpress.dns_name
-    s3_bucket         = aws_s3_bucket.config.id
-    cloudfront_domain = aws_cloudfront_distribution.wordpress.domain_name
-    aws_region        = var.aws_region
-    wp_title          = var.wp_title
-    wp_admin_user     = var.wp_admin_user
-    wp_admin_password = var.wp_admin_password
-    wp_admin_email    = var.wp_admin_email
+    efs_dns_name           = aws_efs_file_system.wordpress.dns_name
+    s3_bucket              = aws_s3_bucket.config.id
+    cloudfront_domain      = aws_cloudfront_distribution.wordpress.domain_name
+    aws_region             = var.aws_region
+    wp_title               = var.wp_title
+    wp_admin_user          = var.wp_admin_user
+    wp_admin_password      = var.wp_admin_password
+    wp_admin_email         = var.wp_admin_email
+    docker_compose_version = var.docker_compose_version
   }))
 
   block_device_mappings {
     device_name = "/dev/sda1"
     ebs {
-      volume_size           = 10
+      volume_size           = local.volume_size
       volume_type           = "gp3"
       delete_on_termination = true
     }

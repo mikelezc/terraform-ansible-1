@@ -3,40 +3,40 @@
 
 - name: Create MariaDB data directory
   file:
-    path: /home/ubuntu/data/mariadb
+    path: /home/{{ deploy_user }}/data/mariadb
     state: directory
-    owner: ubuntu
-    group: ubuntu
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
     mode: '0755'
 
 - name: Create database deployment directory
   file:
-    path: /home/ubuntu/db
+    path: /home/{{ deploy_user }}/db
     state: directory
-    owner: ubuntu
-    group: ubuntu
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
     mode: '0755'
 
 - name: Template .env file with database credentials from inventory
   template:
     src: .env.db.j2
-    dest: /home/ubuntu/db/.env
-    owner: ubuntu
-    group: ubuntu
+    dest: /home/{{ deploy_user }}/db/.env
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
     mode: '0600'
 
 - name: Template Docker Compose for database
   template:
     src: docker-compose.db.yml.j2
-    dest: /home/ubuntu/db/docker-compose.yml
-    owner: ubuntu
-    group: ubuntu
+    dest: /home/{{ deploy_user }}/db/docker-compose.yml
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
     mode: '0644'
 
 - name: Start MariaDB container
-  command: docker compose -f /home/ubuntu/db/docker-compose.yml up -d
+  command: docker compose -f /home/{{ deploy_user }}/db/docker-compose.yml up -d
   args:
-    chdir: /home/ubuntu/db
+    chdir: /home/{{ deploy_user }}/db
 
 - name: Wait for MariaDB to be ready (accepts connections)
   wait_for:

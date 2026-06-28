@@ -21,7 +21,7 @@ systemctl start docker
 
 # Docker Compose v2
 COMPOSE_ARCH=$(uname -m)
-curl -fsSL "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-$${COMPOSE_ARCH}" \
+curl -fsSL "https://github.com/docker/compose/releases/download/v${docker_compose_version}/docker-compose-linux-$${COMPOSE_ARCH}" \
   -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
 mkdir -p /usr/local/lib/docker/cli-plugins
@@ -37,11 +37,11 @@ mkdir -p /home/ubuntu/inception
 # ─── EFS mount (shared WordPress files) ───────────────────────────────────────
 echo "=== [cloud-init] Mounting EFS ==="
 
+NFS_OPTS="nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2"
+
 # Retry EFS mount — mount targets may not be ready immediately
 for i in $(seq 1 10); do
-  if mount -t nfs4 \
-    -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 \
-    "${efs_dns_name}:/" /home/ubuntu/data/wordpress; then
+  if mount -t nfs4 -o "$NFS_OPTS" "${efs_dns_name}:/" /home/ubuntu/data/wordpress; then
     echo "EFS mounted successfully on attempt $i"
     break
   fi
@@ -50,7 +50,7 @@ for i in $(seq 1 10); do
 done
 
 # Persist mount across reboots
-echo "${efs_dns_name}:/ /home/ubuntu/data/wordpress nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,_netdev 0 0" >> /etc/fstab
+echo "${efs_dns_name}:/ /home/ubuntu/data/wordpress nfs4 $NFS_OPTS,_netdev 0 0" >> /etc/fstab
 
 # ─── Download config from S3 ──────────────────────────────────────────────────
 echo "=== [cloud-init] Downloading config from S3 ==="
