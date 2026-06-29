@@ -20,9 +20,13 @@ wp_admin_password = "choose_a_strong_wp_password"
 # wp_admin_email = "admin@example.com"
 # wp_title       = "Cloud-1"
 
+# Optional: email for CloudWatch alarm notifications (leave empty to disable)
+# After terraform apply, check your inbox and confirm the SNS subscription link.
+# alert_email = "tu-email@ejemplo.com"
+
 # Optional: DuckDNS (leave empty to skip DNS update)
 # duckdns_token     = "your-duckdns-token"
-# duckdns_subdomain = "mlezcano-cloud1"
+# duckdns_subdomain = "your-duckdns-subdomain"
 
 # Optional overrides (defaults are fine for evaluation)
 # aws_region    = "eu-west-3"

@@ -15,20 +15,21 @@ resource "aws_launch_template" "web" {
 
   # Cloud-init script rendered with actual values — runs once on instance startup
   user_data = base64encode(templatefile("${path.module}/templates/user_data.sh.tpl", {
-    efs_dns_name      = aws_efs_file_system.wordpress.dns_name
-    s3_bucket         = aws_s3_bucket.config.id
-    cloudfront_domain = aws_cloudfront_distribution.wordpress.domain_name
-    aws_region        = var.aws_region
-    wp_title          = var.wp_title
-    wp_admin_user     = var.wp_admin_user
-    wp_admin_password = var.wp_admin_password
-    wp_admin_email    = var.wp_admin_email
+    efs_dns_name           = aws_efs_file_system.wordpress.dns_name
+    s3_bucket              = aws_s3_bucket.config.id
+    cloudfront_domain      = aws_cloudfront_distribution.wordpress.domain_name
+    aws_region             = var.aws_region
+    wp_title               = var.wp_title
+    wp_admin_user          = var.wp_admin_user
+    wp_admin_password      = var.wp_admin_password
+    wp_admin_email         = var.wp_admin_email
+    docker_compose_version = var.docker_compose_version
   }))
 
   block_device_mappings {
     device_name = "/dev/sda1"
     ebs {
-      volume_size           = 10
+      volume_size           = local.volume_size
       volume_type           = "gp3"
       delete_on_termination = true
     }
@@ -112,7 +113,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   statistic           = "Average"
   threshold           = 70
   alarm_description   = "Scale up when CPU > 70%"
-  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
+  alarm_actions       = concat([aws_autoscaling_policy.scale_up.arn], local.sns_alert_arns)
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.web.name
@@ -129,7 +130,28 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   statistic           = "Average"
   threshold           = 30
   alarm_description   = "Scale down when CPU < 30%"
-  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
+  alarm_actions       = concat([aws_autoscaling_policy.scale_down.arn], local.sns_alert_arns)
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.web.name
+  }
+}
+
+# Alert when running web instances drop below the configured minimum.
+# Fires when the ASG cannot replace a failed instance fast enough.
+resource "aws_cloudwatch_metric_alarm" "instances_low" {
+  count               = var.alert_email != "" ? 1 : 0
+  alarm_name          = "${var.project_name}-instances-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "GroupInServiceInstances"
+  namespace           = "AWS/AutoScaling"
+  period              = 60
+  statistic           = "Average"
+  threshold           = var.web_min_size
+  alarm_description   = "InService web instances dropped below minimum — instance failure detected"
+  alarm_actions       = local.sns_alert_arns
+  ok_actions          = local.sns_alert_arns
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.web.name

@@ -1,23 +1,14 @@
 ---
-# tasks file for docker role
+# tasks file for installing Docker and docker-compose on EC2 instances
 
-- name: Update apt cache and install Docker (Ubuntu/Debian)
+- name: Update apt cache and install Docker
   apt:
-    name: 
+    name:
       - docker.io
       - python3-pip
+      - python3-docker
     state: present
     update_cache: yes
-  when: ansible_pkg_mgr == 'apt'
-
-- name: Install Docker and pip (Amazon Linux / RHEL / CentOS)
-  dnf:
-    name: 
-      - docker
-      - python3-pip
-    state: present
-    update_cache: yes
-  when: ansible_pkg_mgr == 'dnf' or ansible_pkg_mgr == 'yum'
 
 - name: Ensure Docker service is started and enabled
   service:
@@ -44,17 +35,3 @@
     state: link
     mode: 'a+x'
     force: false
-
-- name: Install pip module for Python interaction (Amazon Linux)
-  pip:
-    name: docker
-    state: present
-    extra_args: "--ignore-installed"
-  when: ansible_pkg_mgr == 'dnf' or ansible_pkg_mgr == 'yum'
-
-- name: Install pip module for Python interaction (Ubuntu/Debian)
-  apt:
-    name: python3-docker
-    state: present
-  when: ansible_pkg_mgr == 'apt'
-

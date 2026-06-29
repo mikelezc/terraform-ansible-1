@@ -16,7 +16,11 @@
 
 # ─── TLS certificate (self-signed) ────────────────────────────────────────────
 # Used for direct HTTPS access to the LB (port 443).
-# CloudFront talks to the LB on HTTP (port 80), so this cert is for direct access only.
+
+- name: Ensure cryptography module is installed
+  pip:
+    name: cryptography
+    state: present
 
 - name: Generate OpenSSL private key
   openssl_privatekey:
@@ -46,11 +50,6 @@
 # This runs on the local (control) machine, not on the LB EC2.
 # Re-run the playbook after any scaling event to refresh the upstream list.
 
-- name: Ensure cryptography module is installed
-  pip:
-    name: cryptography
-    state: present
-
 - name: Get web instance private IPs from ASG
   shell: >
     aws ec2 describe-instances
@@ -62,7 +61,7 @@
     --region {{ aws_region }}
   register: web_ips_raw
   delegate_to: localhost
-  become: no
+  become: false
   changed_when: false
 
 - name: Parse web instance IPs
@@ -82,6 +81,8 @@
     msg: "Web instance IPs: {{ web_instance_ips }}"
 
 # ─── Render and deploy config ──────────────────────────────────────────────────
+# The Nginx LB config is templated with the discovered web instance IPs previously.
+# The docker-compose.yml is also templated to mount the SSL certs and config into the container.
 
 - name: Template Nginx LB configuration
   template:

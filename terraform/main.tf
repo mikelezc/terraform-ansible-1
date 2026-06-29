@@ -1,28 +1,7 @@
-terraform {
-  required_version = ">= 1.5"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    local = {
-      source  = "hashicorp/local"
-      version = "~> 2.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.0"
-    }
-    null = {
-      source  = "hashicorp/null"
-      version = "~> 3.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.aws_region
-}
+# We use data blocks to retrieve information about our existing AWS resources,
+# such as availability zones, VPCs, subnets, and AMIs. 
+# This allows us to reference these resources in our Terraform configuration without hardcoding their values.
+# We put it in main.tf because it is a central place for defining the infrastructure resources and their dependencies.
 
 data "aws_availability_zones" "available" {
   state = "available"

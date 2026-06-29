@@ -116,3 +116,34 @@ variable "wp_admin_email" {
   type        = string
   default     = "admin@example.com"
 }
+
+variable "alert_email" {
+  description = "Email address for CloudWatch alarm notifications (leave empty to disable)"
+  type        = string
+  default     = ""
+}
+
+# Docker / container image versions ----------------------------------------------------------
+variable "docker_compose_version" {
+  description = "Docker Compose version to install on web instances"
+  type        = string
+  default     = "2.24.5"
+}
+
+variable "nginx_image" {
+  description = "Nginx Docker image tag"
+  type        = string
+  default     = "nginx:latest"
+}
+
+variable "wordpress_image" {
+  description = "WordPress Docker image tag"
+  type        = string
+  default     = "wordpress:6-fpm"
+}
+
+variable "phpmyadmin_image" {
+  description = "phpMyAdmin Docker image tag"
+  type        = string
+  default     = "phpmyadmin:latest"
+}

@@ -6,7 +6,7 @@
 #   - EC2-DB:  MariaDB in Docker (this playbook deploys it)
 #   - EC2-Web: WordPress + Nginx + phpMyAdmin — configured via cloud-init at boot
 
-# Run after terraform apply:
+# This playbook is idempotent — re-run it after scaling events to refresh the LB config.
 #   ansible-playbook -i inventory.ini playbook.yml
 
 # Run only to refresh LB after scaling (terraform apply -var="web_desired=N"):

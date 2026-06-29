@@ -1,9 +1,5 @@
 # Infraestructura Multi-Servidor en AWS
 
-Este documento es la guía completa de la arquitectura y el despliegue del proyecto. 
-
----
-
 ## 1. Conceptos Fundamentales del Proyecto
 
 La infraestructura se distribuye entre varias máquinas EC2 de AWS, y todo se aprovisiona mediante **dos capas de automatización**:
@@ -36,65 +32,7 @@ Las instancias web se auto-configuran solas al arrancar mediante un script de `c
 
 ## 2. Arquitectura Completa
 
-```
-                        INTERNET
-                           │
-                           ▼
-              ┌─────────────────────────┐
-              │   AWS CloudFront (CDN)  │
-              │   dominio: xxxx.cloudfront.net
-              │   - HTTPS para el usuario
-              │   - Caché de /wp-content/*
-              └────────────┬────────────┘
-                           │ HTTP (puerto 80, interno)
-                           ▼
-              ┌─────────────────────────┐
-              │  EC2-LB (t3.micro)      │
-              │  Ubuntu 22.04           │
-              │  Elastic IP (estable)   │
-              │  Docker: Nginx LB       │
-              │  - Round-robin a webs   │
-              │  - Failover pasivo      │
-              │  - Puerto 443 con cert  │
-              │    auto-firmado         │
-              └──────┬──────────┬───────┘
-                     │          │  Round-robin
-           ┌─────────┘          └─────────┐
-           ▼                              ▼
-  ┌────────────────┐           ┌────────────────┐
-  │  EC2-Web-1     │           │  EC2-Web-2     │  ← Auto Scaling Group
-  │  Ubuntu 22.04  │           │  Ubuntu 22.04  │    (mín. 2, máx. 4)
-  │  Docker:       │           │  Docker:       │
-  │  · Nginx       │           │  · Nginx       │
-  │  · WP PHP-FPM  │           │  · WP PHP-FPM  │
-  │  · phpMyAdmin  │           │  · phpMyAdmin  │
-  └───────┬────────┘           └────────┬───────┘
-          │                             │
-          └──────────────┬──────────────┘
-                         │ puerto 3306 (red privada AWS)
-                         ▼
-              ┌─────────────────────────┐
-              │  EC2-DB (t3.micro)      │
-              │  Ubuntu 22.04           │
-              │  Docker: MariaDB        │
-              │  (solo accesible desde  │
-              │   las instancias web)   │
-              └─────────────────────────┘
-
-  ┌─────────────────────────────────────────────┐
-  │  AWS EFS (Elastic File System)              │
-  │  Montado en /home/ubuntu/data/wordpress     │
-  │  en AMBAS instancias web                    │
-  │  → Uploads y wp-content compartidos         │
-  └─────────────────────────────────────────────┘
-
-  ┌─────────────────────────────────────────────┐
-  │  AWS S3 (bucket privado)                    │
-  │  Almacena: docker-compose.yml,              │
-  │  nginx.conf, .env para las instancias web   │
-  │  → cloud-init lo descarga al arrancar       │
-  └─────────────────────────────────────────────┘
-```
+![AWS arquitectura](guide_photos/AWS_Architecture.png)
 
 ### Desglose de componentes
 
@@ -129,6 +67,19 @@ Todo esto ocurre sin que el operador haga nada. El Auto Scaling Group lo gestion
 Antes de ejecutar cualquier cosa, necesitamos configurar lo siguiente en la máquina local:
 
 ### Herramientas
+
+**Opción A — Contenedor Docker (recomendado para máquinas de 42):**
+
+El repositorio incluye un contenedor con todas las herramientas preinstaladas (Terraform, Ansible, AWS CLI). Es la opción más sencilla y funciona en cualquier máquina con Docker:
+
+```bash
+# Desde la raíz del repositorio:
+./docker/cloud1-tools.sh
+# El contenedor monta el proyecto en /workspace — todos los comandos de esta guía
+# que usan la ruta 42_Cloud-1/ se ejecutan como /workspace/ dentro del contenedor.
+```
+
+**Opción B — Instalación local:**
 
 ```bash
 # macOS — Terraform requiere el tap oficial de HashiCorp (no está en Homebrew core):
@@ -216,12 +167,18 @@ wp_admin_password = "mi_password_wp_seguro"
 # wp_admin_email = "admin@example.com"     # email del admin
 # wp_title       = "Cloud-1"              # título del sitio
 
+# Opcional: email para recibir alertas de CloudWatch (SNS) — dejar vacío para desactivar
+# Tras el apply, confirmar el enlace que llega al correo antes de que lleguen alertas.
+# alert_email = "tu-email@ejemplo.com"
+
 # Opcional: DuckDNS (si queremos un dominio concreto)
 # duckdns_token     = "tu-token-de-duckdns"
 # duckdns_subdomain = "mlezcano-cloud1"
 ```
 
 > **Nunca subas `terraform.tfvars` a git.** Está en el `.gitignore`. Contiene todas las contraseñas.
+
+> **IP dinámica**: si tu IP pública cambia entre sesiones (ISP con IP dinámica), actualiza `my_ip` antes de cada `terraform apply`. Obtén la IP actual con `curl ifconfig.me`. Si no lo haces, el Security Group bloqueará el SSH y Ansible no podrá conectarse.
 
 Las variables de WordPress funcionan así:
 - `wp_admin_password` es obligatoria (no tiene valor por defecto).
@@ -262,9 +219,6 @@ terraform apply
 > terraform plan -out=tfplan   # guarda el plan en un archivo
 > terraform apply tfplan       # aplica exactamente ese plan
 > ```
-
-```bash
-```
 
 Terraform creará, en orden aproximado:
 
@@ -317,7 +271,7 @@ Ansible hace dos cosas:
 
 2. **En EC2-DB**: instala Docker y arranca MariaDB con las credenciales que definiste en `terraform.tfvars`.
 
-### Fase 4: Acceder al sitio
+### Fase 3: Acceder al sitio
 
 ```bash
 # Ver todos los outputs (URL, IPs, nombre del ASG...):
@@ -422,6 +376,108 @@ cd 42_Cloud-1/ansible
 ansible-playbook -i inventory.ini playbook.yml -l lb
 ```
 
+### Pruebas de resiliencia de componentes
+
+Esta tabla resume qué ocurre y qué hay que hacer manualmente si cada componente es eliminado:
+
+| Componente eliminado | Auto-recuperación | Datos afectados | Pasos manuales necesarios |
+|---|---|---|---|
+| Web EC2 (ASG) | ✅ Sí (ASG + cloud-init) | Ninguno | `playbook.yml -l lb` (actualizar upstream) |
+| LB EC2 | ❌ No | Ninguno | `terraform apply` + `playbook.yml -l lb` |
+| DB EC2 | ❌ No | ⚠️ Datos de MariaDB perdidos | `terraform apply` + `playbook.yml -l db` |
+
+---
+
+#### Escenario A: Terminar una instancia web
+
+Simula un fallo de hardware en un servidor web. Para probarlo: AWS Console → EC2 → Instances → seleccionar una instancia `cloud1-web` → Terminate instance.
+
+**Qué ocurre automáticamente:**
+
+- El ASG detecta que hay una instancia menos de las mínimas configuradas y lanza una de reemplazo (~1 min).
+- La nueva instancia se auto-configura vía `cloud-init`: instala Docker, monta el EFS, descarga la config de S3 y arranca WordPress (~5 min). No hace falta ejecutar Ansible.
+- Mientras tanto, Nginx LB detecta de forma pasiva que ese backend no responde y deja de enviarle tráfico. El sitio sigue funcionando con la instancia restante sin interrupción.
+
+**Qué no es automático:**
+
+La nueva instancia del ASG tiene una IP privada distinta a la que tenía la anterior. Nginx LB sigue teniendo la IP vieja en su bloque `upstream` → el tráfico no llega a la nueva instancia. Cuando la instancia esté en estado `running`, hay que actualizar el LB:
+
+```bash
+cd 42_Cloud-1/terraform
+terraform apply          # regenera inventory.ini con las IPs actuales del ASG
+
+cd ../ansible
+ansible-playbook -i inventory.ini playbook.yml -l lb
+```
+
+---
+
+#### Escenario B: Terminar el LB
+
+Simula un fallo del balanceador. Para probarlo: AWS Console → EC2 → Instances → terminar la instancia `cloud1-lb`.
+
+**Qué ocurre:**
+
+- El sitio deja de responder inmediatamente (CloudFront no puede llegar al origen).
+- El LB es una EC2 standalone, no está en un ASG → no se recupera solo.
+- Las instancias web y la DB siguen corriendo sin ningún cambio.
+
+**Pasos para recuperar:**
+
+```bash
+# 1. Crear nueva instancia LB + nueva Elastic IP + regenerar inventory.ini
+cd 42_Cloud-1/terraform
+terraform apply
+
+# 2. Configurar Nginx en la nueva instancia
+#    Las IPs de las instancias web no han cambiado, así que inventory.ini ya las tiene correctas
+cd ../ansible
+ansible-playbook -i inventory.ini playbook.yml -l lb
+```
+
+> CloudFront puede tardar varios minutos en detectar el cambio de origin (nueva IP del LB). El sitio volverá a responder una vez Nginx esté corriendo y CloudFront haya propagado la nueva ruta.
+
+---
+
+#### Escenario C: Terminar el DB EC2
+
+Simula un fallo del servidor de base de datos. Para probarlo: AWS Console → EC2 → Instances → terminar la instancia `cloud1-db`.
+
+**Qué ocurre:**
+
+- WordPress muestra `Error establishing a database connection` en todas las páginas.
+- Los datos de MariaDB (posts, usuarios, configuración del sitio) se pierden: el volumen EBS se elimina junto con la instancia al terminarla.
+- Los ficheros de WordPress (themes, plugins, imágenes subidas) sobreviven intactos en el EFS.
+
+**Pasos para recuperar:**
+
+```bash
+# 1. Crear nueva instancia DB + regenerar inventory.ini
+cd 42_Cloud-1/terraform
+terraform apply
+
+# 2. Desplegar MariaDB en la nueva instancia con las credenciales originales de terraform.tfvars
+cd ../ansible
+ansible-playbook -i inventory.ini playbook.yml -l db
+```
+
+MariaDB arrancará vacío. WordPress detectará que no está instalado en la base de datos. Para reinstalarlo sin esperar a que el ASG lance una nueva instancia web (que lo haría automáticamente vía WP-CLI en cloud-init):
+
+```bash
+# Conectarse a cualquier instancia web (IP visible en AWS Console o en terraform output)
+ssh -i ~/.ssh/cloud-1-key.pem ubuntu@IP_INSTANCIA_WEB
+
+# Reinstalar WordPress con WP-CLI (mismo comando que ejecuta cloud-init en el arranque)
+docker exec -u root wordpress wp core install \
+  --url="https://TU_CLOUDFRONT_DOMAIN" \
+  --title="Cloud-1" \
+  --admin_user="admin" \
+  --admin_password="TU_WP_PASSWORD" \
+  --admin_email="admin@example.com" \
+  --skip-email \
+  --allow-root
+```
+
 ---
 
 ## 8. Gestión del Entorno
@@ -461,7 +517,7 @@ ssh -i ~/.ssh/cloud-1-key.pem ubuntu@$LB_IP
 cat /home/ubuntu/lb/nginx.conf
 
 # Ver los logs del LB:
-docker logs nginx-lb
+sudo docker logs nginx-lb
 ```
 
 ### Ver logs de cloud-init en instancias web
@@ -527,6 +583,17 @@ Terraform pedirá confirmación con `yes`. Eliminará absolutamente todo:
 
 > **Atención**: `terraform destroy` borra los datos de WordPress de forma permanente. Esto es correcto para un entorno de práctica.
 
+### Si `terraform destroy` deja recursos huérfanos
+
+Si hubo applies interrumpidos con Ctrl+C, algunos recursos pueden quedar fuera del estado de Terraform y el destroy no los elimina. En ese caso usa el script de limpieza:
+
+```bash
+# Desde dentro del contenedor cloud1-tools:
+./docker/cloud1-cleanup.sh
+```
+
+El script encuentra y elimina todos los recursos AWS con el tag `Project=cloud1`, independientemente del estado de Terraform. Incluye CloudFront (que requiere ser deshabilitado antes de eliminar, el script lo gestiona automáticamente).
+
 ---
 
 ## 10. Estructura del Repositorio
@@ -535,8 +602,12 @@ Terraform pedirá confirmación con `yes`. Eliminará absolutamente todo:
 42_Cloud-1/
 │
 ├── README.md
-├── apuntes/                      # Apuntes del proyecto + hoja de ruta certificación Terraform
 ├── guide_photos/                 # Capturas para el README
+│
+├── docker/                       # Contenedor de herramientas para despliegue
+│   ├── cloud1-tools.sh           # Lanza el contenedor con terraform, ansible, aws
+│   ├── cloud1-cleanup.sh         # Limpieza de emergencia (elimina todos los recursos cloud1)
+│   └── Dockerfile.tools          # Ubuntu 22.04 + Terraform + Ansible + AWS CLI
 │
 ├── terraform/                    # Capa de infraestructura (Terraform)
 │   ├── main.tf                   # Provider AWS (eu-west-3), data sources
@@ -550,6 +621,7 @@ Terraform pedirá confirmación con `yes`. Eliminará absolutamente todo:
 │   ├── efs.tf                    # Sistema de ficheros compartido
 │   ├── asg.tf                    # Launch Template + Auto Scaling Group + CloudWatch
 │   ├── cloudfront.tf             # CDN (origin = Elastic IP del LB)
+│   ├── sns.tf                    # Alertas email via SNS (opcional, requiere alert_email)
 │   ├── inventory.tf              # Genera ansible/inventory.ini tras el apply
 │   ├── ansible_provision.tf      # Lanza Ansible automáticamente tras crear la infra
 │   ├── terraform.tfvars.example  # Variables de ejemplo (copiar a .tfvars)

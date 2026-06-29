@@ -7,7 +7,7 @@
 #   3. Run ansible-playbook (configures Nginx LB + MariaDB)
 
 # Re-triggers if LB IP, DB IP, or ASG name change (i.e. after terraform destroy + apply).
-# For scaling events (terraform apply -var="web_desired=N"), re-run Ansible manually:
+# For scaling events (terraform apply -var="web_desired=N"), re-run Ansible manually in the Ansible directory:
 #   ansible-playbook -i inventory.ini playbook.yml -l lb
 
 resource "null_resource" "ansible_provision" {
@@ -16,7 +16,6 @@ resource "null_resource" "ansible_provision" {
     aws_eip.lb,
     aws_instance.db,
     aws_autoscaling_group.web,
-    aws_cloudfront_distribution.wordpress,
   ]
 
   triggers = {
@@ -53,11 +52,14 @@ resource "null_resource" "ansible_provision" {
       echo "  DB SSH ready"
 
       echo "=== [Ansible] Waiting for ${var.web_min_size} ASG instances to be InService ==="
-      until [ "$(aws autoscaling describe-auto-scaling-groups \
-        --auto-scaling-group-names ${aws_autoscaling_group.web.name} \
-        --region ${var.aws_region} \
-        --query 'AutoScalingGroups[0].Instances[?LifecycleState==`InService`] | length(@)' \
-        --output text 2>/dev/null)" -ge "${var.web_min_size}" ]; do
+      until python3 - <<'PYEOF'
+import boto3, sys
+c = boto3.client('autoscaling', region_name='${var.aws_region}')
+r = c.describe_auto_scaling_groups(AutoScalingGroupNames=['${aws_autoscaling_group.web.name}'])
+n = sum(1 for i in r['AutoScalingGroups'][0].get('Instances', []) if i['LifecycleState'] == 'InService')
+sys.exit(0 if n >= ${var.web_min_size} else 1)
+PYEOF
+      do
         echo "  Waiting for ASG instances..."
         sleep 30
       done

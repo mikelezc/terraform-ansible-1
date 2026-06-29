@@ -20,10 +20,12 @@ systemctl enable docker
 systemctl start docker
 
 # Docker Compose v2
-curl -fsSL "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64" \
+COMPOSE_ARCH=$(uname -m)
+curl -fsSL "https://github.com/docker/compose/releases/download/v${docker_compose_version}/docker-compose-linux-$${COMPOSE_ARCH}" \
   -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
-ln -sf /usr/local/bin/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose 2>/dev/null || true
+mkdir -p /usr/local/lib/docker/cli-plugins
+ln -sf /usr/local/bin/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
 
 usermod -aG docker ubuntu
 
@@ -35,11 +37,11 @@ mkdir -p /home/ubuntu/inception
 # ─── EFS mount (shared WordPress files) ───────────────────────────────────────
 echo "=== [cloud-init] Mounting EFS ==="
 
+NFS_OPTS="nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2"
+
 # Retry EFS mount — mount targets may not be ready immediately
 for i in $(seq 1 10); do
-  if mount -t nfs4 \
-    -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 \
-    "${efs_dns_name}:/" /home/ubuntu/data/wordpress; then
+  if mount -t nfs4 -o "$NFS_OPTS" "${efs_dns_name}:/" /home/ubuntu/data/wordpress; then
     echo "EFS mounted successfully on attempt $i"
     break
   fi
@@ -48,7 +50,7 @@ for i in $(seq 1 10); do
 done
 
 # Persist mount across reboots
-echo "${efs_dns_name}:/ /home/ubuntu/data/wordpress nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,_netdev 0 0" >> /etc/fstab
+echo "${efs_dns_name}:/ /home/ubuntu/data/wordpress nfs4 $NFS_OPTS,_netdev 0 0" >> /etc/fstab
 
 # ─── Download config from S3 ──────────────────────────────────────────────────
 echo "=== [cloud-init] Downloading config from S3 ==="
@@ -81,13 +83,16 @@ chown -R ubuntu:ubuntu /home/ubuntu/
 # ─── Start services ───────────────────────────────────────────────────────────
 echo "=== [cloud-init] Starting Docker Compose stack ==="
 cd /home/ubuntu/inception
-docker-compose up -d
+docker compose up -d
 
 # ─── Wait for WordPress to initialize ─────────────────────────────────────────
-echo "=== [cloud-init] Waiting for WordPress wp-config.php ==="
-for i in $(seq 1 24); do
-  if [ -f /home/ubuntu/data/wordpress/wp-config.php ]; then
-    echo "wp-config.php found after $${i}x5s"
+# wp-config.php appears quickly (entrypoint creates it first).
+# wp-includes/version.php appears only after the container finishes copying
+# WordPress core files to the EFS mount — this is what WP-CLI actually needs.
+echo "=== [cloud-init] Waiting for WordPress core files on EFS ==="
+for i in $(seq 1 60); do
+  if [ -f /home/ubuntu/data/wordpress/wp-includes/version.php ]; then
+    echo "WordPress core files ready after $${i}x5s"
     break
   fi
   sleep 5
